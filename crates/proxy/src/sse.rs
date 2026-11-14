@@ -135,3 +135,77 @@ mod tests {
         assert_eq!(write_completion_as_sse(body), body);
     }
 }
+
+/// Re-emit a buffered chat completion as legacy text_completion chunks.
+/// Legacy clients (`/v1/completions`) expect `object: "text_completion"`.
+pub fn write_text_completion_as_sse(body: &[u8]) -> Vec<u8> {
+    let c: Value = match serde_json::from_slice(body) {
+        Ok(v) => v,
+        Err(_) => return body.to_vec(),
+    };
+    let choices = match c.get("choices").and_then(|v| v.as_array()) {
+        Some(c) if !c.is_empty() => c.clone(),
+        _ => return body.to_vec(),
+    };
+    let id = c
+        .get("id")
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            format!(
+                "cmpl-{}",
+                chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+            )
+        });
+    let created = c
+        .get("created")
+        .and_then(|v| v.as_i64())
+        .unwrap_or_else(|| chrono::Utc::now().timestamp());
+    let model = c
+        .get("model")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let usage = c.get("usage").cloned();
+
+    let mut out = String::new();
+    let mut emit = |choice: Value, usage: Option<Value>| {
+        let mut chunk = json!({
+            "id": id,
+            "object": "text_completion",
+            "created": created,
+            "model": model,
+            "choices": [choice],
+        });
+        if let Some(u) = usage {
+            chunk["usage"] = u;
+        }
+        out.push_str(&format!("data: {chunk}\n\n"));
+    };
+
+    for (i, ch) in choices.iter().enumerate() {
+        let idx = choice_index(ch, i);
+        let text = ch
+            .get("message")
+            .and_then(|m| m.get("content"))
+            .and_then(|c| c.as_str())
+            .unwrap_or("")
+            .to_string();
+        emit(
+            json!({"index": idx, "text": text, "logprobs": null, "finish_reason": Value::Null}),
+            None,
+        );
+    }
+    let n = choices.len();
+    for (i, ch) in choices.iter().enumerate() {
+        let idx = choice_index(ch, i);
+        let finish = ch.get("finish_reason").cloned().unwrap_or(json!("stop"));
+        let u = if i == n - 1 { usage.clone() } else { None };
+        emit(
+            json!({"index": idx, "text": "", "logprobs": null, "finish_reason": finish}),
+            u,
+        );
+    }
+    out.push_str("data: [DONE]\n\n");
+    out.into_bytes()
+}

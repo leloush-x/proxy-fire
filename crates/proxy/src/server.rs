@@ -4,10 +4,12 @@ use crate::cache::ResponseCache;
 use crate::errors::{openai_error, retry_after_seconds};
 use crate::fallback::{normalize_max_tokens, to_i64, FallbackChain, Request};
 use crate::middleware::{auth, logging, method_not_allowed, recovery};
-use crate::sse::write_completion_as_sse;
+use crate::middleware::{cors, request_id};
+use crate::responses;
+use crate::sse::{write_completion_as_sse, write_text_completion_as_sse};
 use axum::{
     body::Body,
-    extract::State,
+    extract::{Path, State},
     http::{header, HeaderMap, Method, StatusCode},
     middleware as mw,
     response::{IntoResponse, Response},
@@ -64,11 +66,22 @@ impl Server {
         let mux = Router::new()
             .route("/v1/chat/completions", any(chat_completions))
             .route("/v1/models", get(models))
-            .route("/v1/completions", any(completions_stub))
+            .route("/v1/models/{model}", get(model_retrieve))
+            .route("/v1/completions", any(completions_legacy))
+            .route("/v1/responses", any(responses::create_response))
+            .route("/v1/responses/{id}", any(responses::response_unsupported))
+            .route("/v1/embeddings", any(embeddings_stub))
+            .route("/v1/moderations", any(moderations_stub))
             // OpenAI-compatible aliases for clients that omit the /v1 prefix
             .route("/chat/completions", any(chat_completions))
             .route("/models", get(models))
+            .route("/models/{model}", get(model_retrieve))
+            .route("/completions", any(completions_legacy))
+            .route("/responses", any(responses::create_response))
+            .route("/embeddings", any(embeddings_stub))
+            .route("/moderations", any(moderations_stub))
             .route("/health", get(health))
+            .fallback(not_found_fallback)
             .layer(axum::extract::DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
             .layer(mw::from_fn(
                 move |req: axum::extract::Request, next: mw::Next| {
@@ -78,6 +91,8 @@ impl Server {
             ))
             .layer(mw::from_fn(recovery))
             .layer(mw::from_fn(logging))
+            .layer(mw::from_fn(request_id))
+            .layer(mw::from_fn(cors))
             .with_state(state);
 
         let addr: SocketAddr = format!("{}:{}", cfg.proxy.host, cfg.proxy.port)
@@ -206,7 +221,188 @@ async fn models(State(state): State<Arc<AppState>>) -> Response {
     Json(json!({"object": "list", "data": out})).into_response()
 }
 
-async fn completions_stub(method: Method) -> Response {
+async fn model_retrieve(State(state): State<Arc<AppState>>, Path(model): Path<String>) -> Response {
+    let cat = state.catalog.read().unwrap().clone();
+    let known = model == "auto"
+        || state.registry.get(&model).is_ok()
+        || state.cfg.read().unwrap().proxy.agents.contains_key(&model)
+        || cat
+            .free_entries()
+            .iter()
+            .any(|e| e.model_id == model || format!("{}/{}", e.provider_id, e.model_id) == model);
+    if !known {
+        return openai_error(
+            StatusCode::NOT_FOUND,
+            "invalid_request_error",
+            "model_not_found",
+            &format!("model {model:?} not found"),
+        );
+    }
+    let owner = if model == "auto" || state.registry.get(&model).is_ok() {
+        "proxy-fire"
+    } else {
+        cat.free_entries()
+            .iter()
+            .find(|e| e.model_id == model)
+            .map(|e| e.provider_id.as_str())
+            .unwrap_or("proxy-fire")
+    };
+    Json(json!({"id": model, "object": "model", "created": 0, "owned_by": owner})).into_response()
+}
+
+/// Legacy OpenAI text-completion endpoint. Maps a single-string prompt onto
+/// the chat pipeline and converts the answer to a text_completion object.
+async fn completions_legacy(
+    State(state): State<Arc<AppState>>,
+    method: Method,
+    body: axum::body::Bytes,
+) -> Response {
+    if method != Method::POST {
+        return method_not_allowed();
+    }
+    if body.len() > MAX_REQUEST_BODY_BYTES {
+        return openai_error(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "invalid_request_error",
+            "request_too_large",
+            &format!("request body exceeds {} MB", MAX_REQUEST_BODY_BYTES >> 20),
+        );
+    }
+    let raw: Value = match serde_json::from_slice(&body) {
+        Ok(v @ Value::Object(_)) => v,
+        _ => {
+            return openai_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_request_error",
+                "invalid_json",
+                "request body is not a valid JSON object",
+            )
+        }
+    };
+    let prompt = raw.get("prompt");
+    let prompt_text = match prompt {
+        Some(Value::String(s)) => s.clone(),
+        Some(Value::Array(a)) if a.iter().all(|p| p.is_string()) => a
+            .iter()
+            .filter_map(|p| p.as_str())
+            .collect::<Vec<_>>()
+            .join("\n"),
+        Some(_) => {
+            return openai_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_request_error",
+                "invalid_parameter",
+                "prompt must be a string (or an array of strings)",
+            )
+        }
+        None => {
+            return openai_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_request_error",
+                "missing_required_parameter",
+                "prompt is required",
+            )
+        }
+    };
+
+    let model = raw.get("model").and_then(|m| m.as_str()).unwrap_or("auto");
+    let mut chat = json!({
+        "model": model,
+        "messages": [{"role": "user", "content": prompt_text}],
+    });
+    for key in [
+        "temperature",
+        "top_p",
+        "presence_penalty",
+        "frequency_penalty",
+        "stop",
+        "user",
+        "stream",
+        "logprobs",
+        "echo",
+    ] {
+        if let Some(v) = raw.get(key) {
+            chat[key] = v.clone();
+        }
+    }
+    if let Some(mt) = raw.get("max_tokens") {
+        chat["max_tokens"] = mt.clone();
+    }
+    if let Some(n) = raw.get("n") {
+        chat["n"] = n.clone();
+    }
+
+    let resp = run_chat(state, chat).await;
+    let status = resp.status();
+    let headers = resp.headers().clone();
+    let is_sse = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.contains("text/event-stream"))
+        .unwrap_or(false);
+    let (parts, body) = resp.into_parts();
+    let bytes = axum::body::to_bytes(body, MAX_REQUEST_BODY_BYTES)
+        .await
+        .unwrap_or_default();
+    if !status.is_success() {
+        // Error body is already OpenAI-shaped — pass it through.
+        return Response::from_parts(parts, Body::from(bytes));
+    }
+    if is_sse {
+        let out = write_text_completion_as_sse(&bytes);
+        let mut parts = parts;
+        parts.headers.remove(header::CONTENT_LENGTH);
+        parts
+            .headers
+            .insert(header::CONTENT_TYPE, "text/event-stream".parse().unwrap());
+        return Response::from_parts(parts, Body::from(out));
+    }
+    match serde_json::from_slice::<Value>(&bytes) {
+        Ok(c) => {
+            let content = c
+                .get("choices")
+                .and_then(|a| a.as_array())
+                .and_then(|a| a.first())
+                .and_then(|ch| ch.get("message"))
+                .and_then(|m| m.get("content"))
+                .and_then(|c| c.as_str())
+                .unwrap_or("")
+                .to_string();
+            let finish = c
+                .get("choices")
+                .and_then(|a| a.as_array())
+                .and_then(|a| a.first())
+                .and_then(|ch| ch.get("finish_reason"))
+                .cloned()
+                .unwrap_or(json!("stop"));
+            let usage = c.get("usage").cloned().unwrap_or_else(
+                || json!({"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}),
+            );
+            let out = json!({
+                "id": format!("cmpl-{}", chrono::Utc::now().timestamp_millis()),
+                "object": "text_completion",
+                "created": c.get("created").cloned().unwrap_or(json!(chrono::Utc::now().timestamp())),
+                "model": c.get("model").cloned().unwrap_or(json!(model)),
+                "choices": [{
+                    "text": content,
+                    "index": 0,
+                    "logprobs": null,
+                    "finish_reason": finish,
+                }],
+                "usage": usage,
+            });
+            let mut parts = parts;
+            parts.headers.remove(header::CONTENT_LENGTH);
+            parts
+                .headers
+                .insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            Response::from_parts(parts, Body::from(serde_json::to_vec(&out).unwrap()))
+        }
+        Err(_) => Response::from_parts(parts, Body::from(bytes)),
+    }
+}
+
+async fn embeddings_stub(method: Method) -> Response {
     if method != Method::POST {
         return method_not_allowed();
     }
@@ -214,7 +410,28 @@ async fn completions_stub(method: Method) -> Response {
         StatusCode::NOT_IMPLEMENTED,
         "invalid_request_error",
         "unsupported_endpoint",
-        "legacy completions are not supported; use /v1/chat/completions",
+        "embeddings are not available through the free providers this proxy routes to",
+    )
+}
+
+async fn moderations_stub(method: Method) -> Response {
+    if method != Method::POST {
+        return method_not_allowed();
+    }
+    openai_error(
+        StatusCode::NOT_IMPLEMENTED,
+        "invalid_request_error",
+        "unsupported_endpoint",
+        "moderation models are not available through the free providers this proxy routes to",
+    )
+}
+
+async fn not_found_fallback() -> Response {
+    openai_error(
+        StatusCode::NOT_FOUND,
+        "invalid_request_error",
+        "not_found",
+        "unknown endpoint — this proxy serves /v1/chat/completions, /v1/models, /v1/completions, /v1/responses, /health",
     )
 }
 
@@ -238,7 +455,7 @@ async fn chat_completions(
             &format!("request body exceeds {} MB", MAX_REQUEST_BODY_BYTES >> 20),
         );
     }
-    let mut raw: Value = match serde_json::from_slice(&body) {
+    let raw: Value = match serde_json::from_slice(&body) {
         Ok(v @ Value::Object(_)) => v,
         Ok(_) => {
             return openai_error(
@@ -257,8 +474,12 @@ async fn chat_completions(
             )
         }
     };
+    run_chat(state, raw).await
+}
 
-    // Parse the bits the router cares about.
+/// Shared pipeline used by /v1/chat/completions, legacy /v1/completions and
+/// /v1/responses. Input: a chat-completions request body as JSON.
+pub(crate) async fn run_chat(state: Arc<AppState>, mut raw: Value) -> Response {
     let mut req = Request {
         raw: raw.clone(),
         ..Default::default()
@@ -341,10 +562,47 @@ async fn chat_completions(
     // Route: strategy name, "auto"/"", or specific model ID.
     let is_strategy =
         req.model.is_empty() || req.model == "auto" || state.registry.get(&req.model).is_ok();
-    if !is_strategy {
-        return serve_direct_model(state, cfg, cat, req, raw).await;
+    let resp = if !is_strategy {
+        serve_direct_model(state, cfg, cat, req, raw).await
+    } else {
+        execute_strategy_chain(state, cfg, cat, req, raw).await
+    };
+    inject_usage_if_missing(resp).await
+}
+
+/// OpenAI clients expect a `usage` object on 200 JSON responses; inject a
+/// zeroed one when the upstream omitted it. SSE / error / cache-HIT bodies
+/// pass through untouched.
+async fn inject_usage_if_missing(resp: Response) -> Response {
+    if resp.status() != StatusCode::OK {
+        return resp;
     }
-    execute_strategy_chain(state, cfg, cat, req, raw).await
+    let is_json = resp
+        .headers()
+        .get(http::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.starts_with("application/json"))
+        .unwrap_or(false);
+    if !is_json {
+        return resp;
+    }
+    let (mut parts, body) = resp.into_parts();
+    let bytes = match axum::body::to_bytes(body, MAX_REQUEST_BODY_BYTES).await {
+        Ok(b) => b,
+        Err(_) => return Response::from_parts(parts, Body::empty()),
+    };
+    let mut v: Value = match serde_json::from_slice(&bytes) {
+        Ok(v) => v,
+        Err(_) => return Response::from_parts(parts, Body::from(bytes)),
+    };
+    if v.get("choices").is_some() && v.get("usage").is_none() {
+        v["usage"] = json!({"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0});
+    }
+    parts.headers.remove(http::header::CONTENT_LENGTH);
+    Response::from_parts(
+        parts,
+        Body::from(serde_json::to_vec(&v).unwrap_or_else(|_| bytes.to_vec())),
+    )
 }
 
 fn catalog_has_model(cat: &Catalog, model: &str) -> bool {

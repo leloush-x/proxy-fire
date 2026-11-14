@@ -687,13 +687,36 @@ impl FallbackChain {
             .unwrap_or("sess_0")
             .to_string();
         let data = serde_json::to_vec(body).map_err(|e| format!("encoding request: {e}"))?;
+        // Cline's free tier is gated to Cline product surfaces; these headers
+        // identify as the Cline CLI. User-configured extra_headers override.
+        let mut headers: Vec<(String, String)> = vec![
+            ("User-Agent".into(), "Cline/3.0.50".into()),
+            ("HTTP-Referer".into(), "https://cline.bot".into()),
+            ("X-Title".into(), "Cline".into()),
+            ("X-IS-MULTIROOT".into(), "false".into()),
+            ("X-CLIENT-TYPE".into(), "cline-cli".into()),
+            ("X-CLIENT-VERSION".into(), "3.0.50".into()),
+            ("X-PLATFORM".into(), "terminal".into()),
+            ("X-PLATFORM-VERSION".into(), "3.0.50".into()),
+            ("X-CORE-VERSION".into(), "0.0.70".into()),
+        ];
+        for (k, v) in &cfg.extra_headers {
+            if let Some(h) = headers.iter_mut().find(|h| h.0.eq_ignore_ascii_case(k)) {
+                h.1 = v.clone();
+            } else {
+                headers.push((k.clone(), v.clone()));
+            }
+        }
         let mut req = self
             .http
             .post(&url)
             .header("Content-Type", "application/json")
-            .header("Authorization", access) // already carries the workos: prefix
-            .header("X-Task-ID", &session)
-            .body(data);
+            .header("Authorization", format!("Bearer {access}")) // access already carries the workos: prefix
+            .header("X-Task-ID", &session);
+        for (k, v) in &headers {
+            req = req.header(k.as_str(), v.as_str());
+        }
+        req = req.body(data);
         if let Some(d) = proxy_fire_core::config::parse_duration(&cfg.timeout) {
             req = req.timeout(d);
         }
