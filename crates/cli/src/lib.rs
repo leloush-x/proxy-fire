@@ -5,6 +5,7 @@ pub mod bench;
 pub mod boot;
 pub mod commands;
 pub mod login;
+pub mod picker;
 
 use proxy_fire_core::catalog::Catalog;
 use proxy_fire_core::config::Config;

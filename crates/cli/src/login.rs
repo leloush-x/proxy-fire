@@ -12,65 +12,13 @@ pub async fn run(cfg_file: &str) -> Result<()> {
     // Catalog (optional) — used to show how many free models each provider has.
     let cat_path = proxy_fire_core::paths::catalog_read_path(&cfg.catalog.path, cfg_file);
     let cat = Catalog::load(&cat_path).unwrap_or_default();
-    let free_counts = |id: &str| {
-        cat.free_entries()
-            .iter()
-            .filter(|e| e.provider_id == id)
-            .count()
-    };
 
-    print_header();
-    for (i, p) in providers.iter().enumerate() {
-        let status = if p.api_key_env.is_empty() {
-            "\x1b[2mno key needed\x1b[0m"
-        } else if p.missing_key() {
-            "\x1b[31mkey missing\x1b[0m"
-        } else {
-            "\x1b[32mkey set\x1b[0m"
-        };
-        let enabled = if p.enabled {
-            ""
-        } else {
-            " \x1b[2m(disabled)\x1b[0m"
-        };
-        println!(
-            "  \x1b[36m{:>2}\x1b[0m  {:<18} {:<26} {:>3} models  {status}{enabled}",
-            i + 1,
-            p.id,
-            p.name,
-            free_counts(&p.id)
-        );
-    }
-
-    let mut stdout = std::io::stdout();
-    println!();
-    print!("  \x1b[1mprovider # or id (blank to cancel)\x1b[0m › ");
-    let _ = stdout.flush();
-
-    let mut line = String::new();
-    if std::io::stdin().read_line(&mut line).unwrap_or(0) == 0 {
-        return Ok(());
-    }
-    let pick = line.trim();
-    if pick.is_empty() {
+    let Some(sel) = crate::picker::pick(&providers, &cat)? else {
         println!("  cancelled.");
         return Ok(());
-    }
-
-    let chosen: &ProviderConfig = match pick.parse::<usize>() {
-        Ok(n) if n >= 1 && n <= providers.len() => providers[n - 1],
-        _ => match providers.iter().find(|p| p.id.eq_ignore_ascii_case(pick)) {
-            Some(p) => p,
-            None => anyhow::bail!("no provider matches {pick:?}"),
-        },
     };
     println!();
-    login_provider(chosen).await
-}
-
-fn print_header() {
-    println!("\x1b[1mproxy-fire\x1b[0m \x1b[2m· add a provider key\x1b[0m");
-    println!("\x1b[2m──────────────────────────────────────────────────────────────\x1b[0m");
+    login_provider(providers[sel]).await
 }
 
 /// Dynamic per-provider flow.
