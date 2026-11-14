@@ -190,7 +190,9 @@ async fn validate_key(p: &ProviderConfig, key: &str) -> KeyVerdict {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(20))
         .build();
-    let Ok(client) = client else { return KeyVerdict::Unverifiable };
+    let Ok(client) = client else {
+        return KeyVerdict::Unverifiable;
+    };
 
     // Prefer an authenticated 1-token probe on a catalog model we know exists.
     let model = catalog_model_for(&p.id);
@@ -202,7 +204,8 @@ async fn validate_key(p: &ProviderConfig, key: &str) -> KeyVerdict {
             "messages": [{"role": "user", "content": "Hi"}]
         });
         if !p.native_features.service_tier.is_empty() {
-            payload["service_tier"] = serde_json::Value::String(p.native_features.service_tier.clone());
+            payload["service_tier"] =
+                serde_json::Value::String(p.native_features.service_tier.clone());
         }
         let mut req = client
             .post(&url)
