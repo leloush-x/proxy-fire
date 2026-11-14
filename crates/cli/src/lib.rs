@@ -44,13 +44,22 @@ pub async fn rescan_catalog(
     Ok(cat)
 }
 
-/// Load families/capabilities YAML (optional; logs on failure).
+/// Load families/capabilities YAML (optional; falls back to embedded copies).
 pub fn load_model_data(cfg_file: &str) {
-    let find = |name: &str| proxy_fire_core::paths::find_data_file(name, cfg_file);
-    if let Err(e) = proxy_fire_core::capabilities::load_families(&find("families.yaml")) {
+    use proxy_fire_core::capabilities;
+    use proxy_fire_core::paths::find_data_file;
+
+    let r1 = capabilities::load_families(&find_data_file("families.yaml", cfg_file))
+        .or_else(|_| capabilities::load_families_from_str(proxy_fire_core::embedded::FAMILIES));
+    if let Err(e) = r1 {
         tracing::warn!("families.yaml not found or invalid: {e} (family detection disabled)");
     }
-    if let Err(e) = proxy_fire_core::capabilities::load_capabilities(&find("capabilities.yaml")) {
+
+    let r2 = capabilities::load_capabilities(&find_data_file("capabilities.yaml", cfg_file))
+        .or_else(|_| {
+            capabilities::load_capabilities_from_str(proxy_fire_core::embedded::CAPABILITIES)
+        });
+    if let Err(e) = r2 {
         tracing::warn!(
             "capabilities.yaml not found or invalid: {e} (capability detection disabled)"
         );

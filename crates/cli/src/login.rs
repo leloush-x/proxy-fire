@@ -9,9 +9,13 @@ pub async fn run(cfg_file: &str) -> Result<()> {
     let cfg = proxy_fire_core::config::load(cfg_file).context("loading config")?;
     let providers: Vec<&ProviderConfig> = cfg.providers.iter().collect();
 
-    // Catalog (optional) — used to show how many free models each provider has.
+    // Catalog (optional) — show free-model counts; embedded copy as fallback
     let cat_path = proxy_fire_core::paths::catalog_read_path(&cfg.catalog.path, cfg_file);
-    let cat = Catalog::load(&cat_path).unwrap_or_default();
+    let cat = if cat_path.is_file() {
+        Catalog::load(&cat_path).unwrap_or_default()
+    } else {
+        serde_json::from_str(proxy_fire_core::embedded::CATALOG).unwrap_or_default()
+    };
 
     let Some(sel) = crate::picker::pick(&providers, &cat)? else {
         println!("  cancelled.");
@@ -45,7 +49,7 @@ async fn login_provider(p: &ProviderConfig) -> Result<()> {
         std::io::stdin().read_line(&mut yn)?;
         if !yn.trim().to_ascii_lowercase().starts_with('y') {
             println!("  kept existing key(s).");
-            return add_extra_key(p);
+            return add_extra_key(p).await;
         }
     }
 
@@ -89,35 +93,59 @@ async fn login_provider(p: &ProviderConfig) -> Result<()> {
         env_file_path().display()
     );
 
-    add_extra_key(p)
+    add_extra_key(p).await
 }
 
-/// Offer key slots 2..9 (multi-account pooling).
-fn add_extra_key(p: &ProviderConfig) -> Result<()> {
+/// Pool extra accounts: offers key slots 2..9 one at a time (all providers behave the same).
+async fn add_extra_key(p: &ProviderConfig) -> Result<()> {
     if p.api_key_env.is_empty() {
         return Ok(());
     }
-    print!(
-        "\n  \x1b[2madd another {}_2 account to pool keys? [y/N]\x1b[0m › ",
-        p.api_key_env
-    );
-    let _ = std::io::stdout().flush();
-    let mut yn = String::new();
-    std::io::stdin().read_line(&mut yn)?;
-    if !yn.trim().to_ascii_lowercase().starts_with('y') {
-        return Ok(());
+    for slot in 2..=9usize {
+        print!(
+            "\n  \x1b[2madd {}_{} account? [y/N]\x1b[0m › ",
+            p.api_key_env, slot
+        );
+        let _ = std::io::stdout().flush();
+        let mut yn = String::new();
+        std::io::stdin().read_line(&mut yn)?;
+        if !yn.trim().to_ascii_lowercase().starts_with('y') {
+            break;
+        }
+
+        print!("  {}_{} › ", p.api_key_env, slot);
+        let _ = std::io::stdout().flush();
+        let key = read_hidden()?;
+        if key.trim().is_empty() {
+            println!("  (empty, skipped)");
+            continue;
+        }
+
+        // Same 1-token validation as the primary key
+        let verdict = validate_key(p, key.trim()).await;
+        match verdict {
+            KeyVerdict::Verified => println!("  \x1b[32m✓ works\x1b[0m"),
+            KeyVerdict::RateLimited => println!("  \x1b[33m!\x1b[0m works (rate limited)"),
+            KeyVerdict::Rejected => {
+                print!("  \x1b[31mkey rejected\x1b[0m — save anyway? [y/N] › ");
+                let _ = std::io::stdout().flush();
+                let mut yn = String::new();
+                std::io::stdin().read_line(&mut yn)?;
+                if !yn.trim().to_ascii_lowercase().starts_with('y') {
+                    continue;
+                }
+            }
+            KeyVerdict::Unverifiable => {
+                println!("  \x1b[2munverifiable (saved unverified)\x1b[0m")
+            }
+        }
+
+        save_key(p, key.trim(), slot)?;
+        println!(
+            "  \x1b[32m✓\x1b[0m saved {}_{} — the proxy rotates keys on 429 and skips a 401'd key.",
+            p.api_key_env, slot
+        );
     }
-    print!("  {}_2 › ", p.api_key_env);
-    let _ = std::io::stdout().flush();
-    let key = read_hidden()?;
-    if key.trim().is_empty() {
-        return Ok(());
-    }
-    save_key(p, key.trim(), 2)?;
-    println!(
-        "  \x1b[32m✓\x1b[0m saved {}_2 — the proxy rotates keys on 429 and skips a 401'd key.",
-        p.api_key_env
-    );
     Ok(())
 }
 

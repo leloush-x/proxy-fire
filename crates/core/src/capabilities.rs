@@ -60,3 +60,19 @@ pub fn reset() {
     FAMILIES.write().unwrap().clear();
     PATTERNS.write().unwrap().clear();
 }
+
+/// Load families from an in-memory YAML string (embedded fallback).
+pub fn load_families_from_str(data: &str) -> Result<(), std::io::Error> {
+    let families: Vec<ModelFamily> = serde_yaml_ng::from_str(data)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    *FAMILIES.write().unwrap() = families;
+    Ok(())
+}
+
+/// Load capability patterns from an in-memory YAML string (embedded fallback).
+pub fn load_capabilities_from_str(data: &str) -> Result<(), std::io::Error> {
+    let patterns: Vec<KnownCapabilityPattern> = serde_yaml_ng::from_str(data)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    *PATTERNS.write().unwrap() = patterns;
+    Ok(())
+}

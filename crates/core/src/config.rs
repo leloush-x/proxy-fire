@@ -435,7 +435,13 @@ pub fn load(path: &str) -> Result<Config, ConfigError> {
                         );
                         (c, bundled)
                     }
-                    Err(_) => (String::new(), PathBuf::from("<defaults>")),
+                    Err(_) => {
+                        tracing::info!("config: no config.yaml found — using the catalog/config embedded in the binary");
+                        (
+                            crate::embedded::CONFIG.to_string(),
+                            PathBuf::from("<embedded config.example.yaml>"),
+                        )
+                    }
                 }
             }
         }

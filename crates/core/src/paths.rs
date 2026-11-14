@@ -75,3 +75,26 @@ pub fn catalog_read_path(path: &str, config_path: &str) -> PathBuf {
     }
     expanded
 }
+
+/// Read a bundled data file by name: on-disk copies win (same search order
+/// as find_data_file), then fall back to the copy embedded in the binary.
+pub fn read_data_file(name: &str, config_path: &str) -> Option<String> {
+    let path = find_data_file(name, config_path);
+    if path.is_file() {
+        return std::fs::read_to_string(&path).ok();
+    }
+    crate::embedded::for_name(name).map(str::to_string)
+}
+
+/// Materialize the embedded catalog to the user's catalog path on first run.
+/// Subsequent runs use the file (which `proxy-fire scan update` rewrites).
+pub fn ensure_user_catalog(path: &str) -> std::io::Result<()> {
+    let expanded = expand_home(path);
+    if file_exists(&expanded) {
+        return Ok(());
+    }
+    if let Some(dir) = expanded.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(&expanded, crate::embedded::CATALOG)
+}

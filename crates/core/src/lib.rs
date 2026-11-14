@@ -6,6 +6,7 @@ pub mod capabilities;
 pub mod catalog;
 pub mod config;
 pub mod dotenv;
+pub mod embedded;
 pub mod enriched;
 pub mod gemini;
 pub mod gitsync;

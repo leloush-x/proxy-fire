@@ -162,9 +162,16 @@ async fn refresh_llm(cfg: Config, cfg_file: &str) -> Result<()> {
     let cat = Catalog::load(&expand_home(&cfg.catalog.path))
         .with_context(|| format!("loading catalog {}", cfg.catalog.path))?;
     let prompt_file = if cfg.refresh.prompt_file.is_empty() {
-        find_data_file("refresh-prompt.txt", cfg_file)
-            .to_string_lossy()
-            .into_owned()
+        let found = find_data_file("refresh-prompt.txt", cfg_file);
+        if found.is_file() {
+            found.to_string_lossy().into_owned()
+        } else {
+            // Materialize the embedded prompt to a temp file
+            let tmp = std::env::temp_dir().join("proxy-fire-refresh-prompt.txt");
+            std::fs::create_dir_all(tmp.parent().unwrap()).ok();
+            std::fs::write(&tmp, proxy_fire_core::embedded::REFRESH_PROMPT)?;
+            tmp.to_string_lossy().into_owned()
+        }
     } else {
         cfg.refresh.prompt_file.clone()
     };

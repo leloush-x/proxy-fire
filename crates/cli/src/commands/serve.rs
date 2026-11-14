@@ -36,11 +36,22 @@ pub async fn run(args: ServeArgs) -> Result<()> {
 }
 
 async fn run_inner(cfg: Config, cfg_file: String) -> Result<()> {
-    // Load catalog (bundled catalog.json until the first scan writes catalog.path)
+    // First run materializes the embedded catalog to ~/.proxy-fire/catalog.json
     let cat_path_str = cfg.catalog.path.clone();
+    if let Err(e) = proxy_fire_core::paths::ensure_user_catalog(&cat_path_str) {
+        tracing::warn!(
+            "could not write user catalog to {cat_path_str}: {e} — using embedded copy in memory"
+        );
+    }
     let cat_read = catalog_read_path(&cat_path_str, &cfg_file);
-    let cat = Catalog::load(&cat_read)
-        .with_context(|| format!("loading catalog {}", cat_read.display()))?;
+    let cat = if cat_read.is_file() {
+        Catalog::load(&cat_read)
+            .with_context(|| format!("loading catalog {}", cat_read.display()))?
+    } else {
+        // File unreadable/absent even after materialization — parse the embedded copy.
+        serde_json::from_str(proxy_fire_core::embedded::CATALOG)
+            .context("parsing embedded catalog.json")?
+    };
     let free_count = cat.free_entries().len();
     tracing::info!(
         "catalog: {free_count} free model(s) loaded from {}",
