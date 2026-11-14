@@ -23,12 +23,13 @@ pub struct Config {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProxyConfig {
-    /// Listen address. 127.0.0.1 by default — exposing spends your quotas.
+    /// Listen address. 0.0.0.0 by default — protected by the default `fire` password.
     #[serde(default = "default_host")]
     pub host: String,
     #[serde(default = "default_port")]
     pub port: u16,
-    #[serde(default)]
+    /// Bearer token clients must send. Defaults to `fire`.
+    #[serde(default = "default_auth_token")]
     pub auth_token: String,
     #[serde(default = "default_cache_ttl")]
     pub cache_ttl: u64,
@@ -194,7 +195,10 @@ pub struct ProviderConfig {
 // ---- defaults ----
 
 fn default_host() -> String {
-    "127.0.0.1".into()
+    "0.0.0.0".into()
+}
+fn default_auth_token() -> String {
+    "fire".into()
 }
 fn default_port() -> u16 {
     8080
@@ -247,7 +251,7 @@ impl Default for ProxyConfig {
         Self {
             host: default_host(),
             port: default_port(),
-            auth_token: String::new(),
+            auth_token: default_auth_token(),
             cache_ttl: default_cache_ttl(),
             log_level: default_log_level(),
             strategy: default_strategy(),

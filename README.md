@@ -196,7 +196,7 @@ The router spreads load across the pool round-robin, retries the same model with
 
 | | Command |
 |---|---|
-| **Docker** (amd64, arm64) | `docker run --rm -p 127.0.0.1:8080:8080 -e GROQ_API_KEY=gsk_... ghcr.io/leloush-x/proxy-fire:latest` |
+| **Docker** (amd64, arm64) | `docker run --rm -p 0.0.0.0:8080:8080 -e GROQ_API_KEY=gsk_... ghcr.io/leloush-x/proxy-fire:latest` |
 | **Archive** (Linux) | `.tar.gz` on the [releases page](https://github.com/leloush-x/proxy-fire/releases/latest); keep `configs/` next to the binaries |
 | **cargo** | `cargo install --git https://github.com/leloush-x/proxy-fire proxy-fire --bin proxy-fire` (binary only, so pass `-c config.yaml`) |
 | **From source** | `git clone … && make build` (the binary lands in `bin/`) |
@@ -236,12 +236,12 @@ Config is read from `-c path`, `./config.yaml` or `~/.proxy-fire/config.yaml`, a
 ```yaml
 proxy:
   strategy: "adaptive"   # default when a request says "auto"
-  host: "127.0.0.1"      # "0.0.0.0" to expose it, and then set auth_token too
+  host: "0.0.0.0"        # "127.0.0.1" for localhost-only
   port: 8080
-  auth_token: ""         # when set, clients must send it as their API key
+  auth_token: "fire"     # Bearer token clients must send (default: "fire")
 ```
 
-**It spends your quotas, so it listens on `127.0.0.1` by default.** To reach it from other machines, use `--host 0.0.0.0` *and* set `proxy.auth_token`. The proxy logs a warning if you expose it without a token. The Docker image listens on all interfaces inside the container, so publish its port to `127.0.0.1` as shown above.
+**It listens on `0.0.0.0` by default and requires the bearer token `fire`** (change `proxy.auth_token`; set it to `""` for open access on localhost). On startup the proxy prints its OpenAI-compatible base URL(s) and API key to the log. `GET /models`, `POST /chat/completions` and the `/v1/...` routes are all served. The Docker image listens on all interfaces inside the container, so publish the port on localhost (`-p 127.0.0.1:8080:8080`) or change `proxy.auth_token`.
 
 ### Keep the catalog fresh
 

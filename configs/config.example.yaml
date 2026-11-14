@@ -24,9 +24,9 @@
 #   on a 429.
 
 proxy:
-  host: "127.0.0.1"    # Listen address. Use "0.0.0.0" to expose on your network (set auth_token too)
+  host: "0.0.0.0"      # Listen address. Use "127.0.0.1" for localhost-only
   port: 8080
-  auth_token: ""       # Set to require a Bearer token on incoming requests
+  auth_token: "fire"   # Bearer token clients must send. Default: "fire"
   cache_ttl: 300       # Response cache TTL in seconds (0 to disable)
   log_level: "info"
   strategy: "adaptive" # Default strategy: adaptive, performance, speed, volume, balanced,

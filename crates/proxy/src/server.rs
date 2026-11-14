@@ -65,6 +65,9 @@ impl Server {
             .route("/v1/chat/completions", any(chat_completions))
             .route("/v1/models", get(models))
             .route("/v1/completions", any(completions_stub))
+            // OpenAI-compatible aliases for clients that omit the /v1 prefix
+            .route("/chat/completions", any(chat_completions))
+            .route("/models", get(models))
             .route("/health", get(health))
             .layer(axum::extract::DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
             .layer(mw::from_fn(
@@ -85,6 +88,7 @@ impl Server {
             addr,
             cfg.proxy.strategy
         );
+        print_startup_banner(&cfg);
         if cfg.proxy.auth_token.is_empty() && !is_loopback_host(&cfg.proxy.host) {
             tracing::warn!(
                 "listening on {:?} without proxy.auth_token — anyone who can reach this port can spend your provider quotas",
@@ -111,6 +115,51 @@ pub struct AppState {
     pub reliability: Arc<ReliabilityTracker>,
     pub cache: ResponseCache,
     pub http: reqwest::Client,
+}
+
+/// Best-effort primary interface IP (no traffic is sent; UDP connect only
+/// resolves the route). Falls back to 127.0.0.1.
+fn primary_ip() -> Option<std::net::IpAddr> {
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    socket.local_addr().ok().map(|a| a.ip())
+}
+
+/// Print the OpenAI-compatible connection details once at startup.
+fn print_startup_banner(cfg: &proxy_fire_core::config::Config) {
+    let port = cfg.proxy.port;
+    let auth = if cfg.proxy.auth_token.is_empty() {
+        "(none — open access)".to_string()
+    } else {
+        cfg.proxy.auth_token.clone()
+    };
+    let mut hosts = vec![format!("http://127.0.0.1:{port}/v1")];
+    if cfg.proxy.host == "0.0.0.0" || cfg.proxy.host == "::" {
+        if let Some(ip) = primary_ip() {
+            if !ip.is_loopback() {
+                hosts.push(format!("http://{ip}:{port}/v1"));
+            }
+        }
+        hosts.push(format!("http://<this-machine-ip>:{port}/v1"));
+    } else if cfg.proxy.host != "127.0.0.1" && cfg.proxy.host != "localhost" {
+        hosts.push(format!("http://{}:{port}/v1", cfg.proxy.host));
+    }
+    println!();
+    println!("  proxy-fire  ·  OpenAI-compatible endpoint");
+    println!("  ─────────────────────────────────────────────");
+    for url in &hosts {
+        println!("  Base URL : {url}");
+    }
+    println!("  API key  : {auth}");
+    println!(
+        "  Models   : auto  (or any strategy: speed, balanced, coding, reliable, adaptive, …)"
+    );
+    println!(
+        "  Models API: GET {}",
+        hosts[0].replace("/v1", "/v1/models")
+    );
+    println!("  ─────────────────────────────────────────────");
+    println!();
 }
 
 fn is_loopback_host(host: &str) -> bool {
