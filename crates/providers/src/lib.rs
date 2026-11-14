@@ -8,8 +8,8 @@ use serde_json::Value;
 use std::sync::OnceLock;
 use std::time::Duration;
 
-pub mod cline;
 mod cerebras;
+pub mod cline;
 mod gemini;
 mod generic;
 mod github_models;

@@ -834,7 +834,10 @@ impl FallbackChain {
                     .unwrap_or_else(proxy_fire_providers::cline::new_session_id);
                 obj.insert("session_id".to_string(), Value::String(session));
                 if obj.get("reasoning_effort").is_none() {
-                    obj.insert("reasoning_effort".to_string(), Value::String("high".to_string()));
+                    obj.insert(
+                        "reasoning_effort".to_string(),
+                        Value::String("high".to_string()),
+                    );
                 }
                 obj.insert("stream".to_string(), Value::Bool(true));
             }

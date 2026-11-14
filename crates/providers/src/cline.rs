@@ -50,7 +50,8 @@ struct CachedToken {
 }
 
 fn token_cache() -> &'static RwLock<std::collections::HashMap<String, CachedToken>> {
-    static CACHE: OnceLock<RwLock<std::collections::HashMap<String, CachedToken>>> = OnceLock::new();
+    static CACHE: OnceLock<RwLock<std::collections::HashMap<String, CachedToken>>> =
+        OnceLock::new();
     CACHE.get_or_init(|| RwLock::new(std::collections::HashMap::new()))
 }
 
@@ -60,7 +61,10 @@ fn now_ms() -> i64 {
 
 fn parse_expiry_ms(v: &Value) -> i64 {
     match v {
-        Value::Number(n) => n.as_i64().or_else(|| n.as_f64().map(|f| f as i64)).unwrap_or(0),
+        Value::Number(n) => n
+            .as_i64()
+            .or_else(|| n.as_f64().map(|f| f as i64))
+            .unwrap_or(0),
         Value::String(s) => chrono::DateTime::parse_from_rfc3339(s)
             .map(|t| t.timestamp_millis())
             .unwrap_or(0),
@@ -108,12 +112,19 @@ pub async fn ensure_access_token(client: &Client, refresh_token: &str) -> Result
         let body = resp.text().await.unwrap_or_default();
         return Err(format!("cline refresh rejected: {}", tail(&body)));
     }
-    let r: ClineRefreshResp = resp.json().await.map_err(|e| format!("cline refresh decode: {e}"))?;
+    let r: ClineRefreshResp = resp
+        .json()
+        .await
+        .map_err(|e| format!("cline refresh decode: {e}"))?;
     let access = format!("{ACCESS_PREFIX}{}", r.data.access_token);
-    let expires_at = parse_expiry_ms(&r.data.expires_at.unwrap_or(Value::Null))
-        .saturating_sub(REFRESH_SKEW_MS);
+    let expires_at =
+        parse_expiry_ms(&r.data.expires_at.unwrap_or(Value::Null)).saturating_sub(REFRESH_SKEW_MS);
     // Fall back to a conservative 1h lifetime if the server omits expiry.
-    let expires_at = if expires_at <= now_ms() { now_ms() + 3_600_000 } else { expires_at };
+    let expires_at = if expires_at <= now_ms() {
+        now_ms() + 3_600_000
+    } else {
+        expires_at
+    };
 
     if let Ok(mut map) = token_cache().write() {
         map.insert(
@@ -170,7 +181,10 @@ pub async fn start_device_auth(client: &Client) -> Result<DeviceAuth, String> {
         let body = resp.text().await.unwrap_or_default();
         return Err(format!("workos device auth failed: {}", tail(&body)));
     }
-    let d: DeviceAuthResp = resp.json().await.map_err(|e| format!("device auth decode: {e}"))?;
+    let d: DeviceAuthResp = resp
+        .json()
+        .await
+        .map_err(|e| format!("device auth decode: {e}"))?;
     Ok(DeviceAuth {
         device_code: d.device_code,
         user_code: d.user_code,
@@ -233,7 +247,10 @@ pub async fn poll_device_token(
         });
         if status == 200 {
             if let (Some(a), Some(r)) = (body.access_token, body.refresh_token) {
-                return Ok(WorkosTokens { access_token: a, refresh_token: r });
+                return Ok(WorkosTokens {
+                    access_token: a,
+                    refresh_token: r,
+                });
             }
             return Err("workos returned 200 with missing tokens".into());
         }
@@ -297,9 +314,16 @@ pub async fn register_with_cline(
         let body = resp.text().await.unwrap_or_default();
         return Err(format!("cline register failed: {}", tail(&body)));
     }
-    let r: ClineRegisterResp = resp.json().await.map_err(|e| format!("cline register decode: {e}"))?;
-    let refresh = r.data.refresh_token.ok_or_else(|| "cline register response missing refresh token".to_string())?;
-    let expires_at_ms = parse_expiry_ms(&r.data.expires_at.unwrap_or(Value::Null)).saturating_sub(REFRESH_SKEW_MS);
+    let r: ClineRegisterResp = resp
+        .json()
+        .await
+        .map_err(|e| format!("cline register decode: {e}"))?;
+    let refresh = r
+        .data
+        .refresh_token
+        .ok_or_else(|| "cline register response missing refresh token".to_string())?;
+    let expires_at_ms =
+        parse_expiry_ms(&r.data.expires_at.unwrap_or(Value::Null)).saturating_sub(REFRESH_SKEW_MS);
     Ok(ClineRegistration {
         access_token: format!("{ACCESS_PREFIX}{}", r.data.access_token),
         refresh_token: refresh,
@@ -314,7 +338,10 @@ pub async fn register_with_cline(
 
 /// Validate a refresh token by exchanging it for an access token.
 /// Returns the account email when available.
-pub async fn validate_refresh_token(client: &Client, refresh_token: &str) -> Result<String, String> {
+pub async fn validate_refresh_token(
+    client: &Client,
+    refresh_token: &str,
+) -> Result<String, String> {
     let access = ensure_access_token(client, refresh_token).await?;
     let _ = access; // token works
     Ok("ok".into())
@@ -346,7 +373,11 @@ pub fn aggregate_stream(body: &[u8]) -> Result<Vec<u8>, String> {
     let mut cur_tool_index: i64 = -1;
     let mut cur_args = String::new();
 
-    fn flush_tool(cur_tool: &mut Option<Value>, cur_args: &mut String, tool_calls: &mut Vec<Value>) {
+    fn flush_tool(
+        cur_tool: &mut Option<Value>,
+        cur_args: &mut String,
+        tool_calls: &mut Vec<Value>,
+    ) {
         if let Some(mut t) = cur_tool.take() {
             if let Some(f) = t.get_mut("function").and_then(|f| f.as_object_mut()) {
                 f.insert("arguments".into(), Value::String(std::mem::take(cur_args)));
@@ -357,7 +388,9 @@ pub fn aggregate_stream(body: &[u8]) -> Result<Vec<u8>, String> {
 
     for raw_line in text.lines() {
         let line = raw_line.trim_end_matches('\r');
-        let Some(payload) = line.strip_prefix("data:") else { continue };
+        let Some(payload) = line.strip_prefix("data:") else {
+            continue;
+        };
         let payload = payload.trim();
         if payload.is_empty() || payload == "[DONE]" {
             continue;
@@ -368,7 +401,10 @@ pub fn aggregate_stream(body: &[u8]) -> Result<Vec<u8>, String> {
         };
         // Unwrap {"data": {...}} envelope when present.
         if let Some(inner) = obj.get("data").filter(|d| d.is_object()).cloned() {
-            if inner.get("choices").is_some() || inner.get("model").is_some() || inner.get("usage").is_some() {
+            if inner.get("choices").is_some()
+                || inner.get("model").is_some()
+                || inner.get("usage").is_some()
+            {
                 obj = inner;
             }
         }
@@ -382,14 +418,21 @@ pub fn aggregate_stream(body: &[u8]) -> Result<Vec<u8>, String> {
                 usage = Some(u.clone());
             }
         }
-        let Some(choices) = obj.get("choices").and_then(|c| c.as_array()) else { continue };
-        let Some(choice) = choices.first() else { continue };
+        let Some(choices) = obj.get("choices").and_then(|c| c.as_array()) else {
+            continue;
+        };
+        let Some(choice) = choices.first() else {
+            continue;
+        };
         if let Some(fr) = choice.get("finish_reason").and_then(|f| f.as_str()) {
             if !fr.is_empty() {
                 finish_reason = fr.to_string();
             }
         }
-        let delta = choice.get("delta").or_else(|| choice.get("message")).unwrap_or(choice);
+        let delta = choice
+            .get("delta")
+            .or_else(|| choice.get("message"))
+            .unwrap_or(choice);
         if let Some(c) = delta.get("content").and_then(|c| c.as_str()) {
             content.push_str(c);
         }
@@ -415,7 +458,9 @@ pub fn aggregate_stream(body: &[u8]) -> Result<Vec<u8>, String> {
                     if let Some(fn_) = tc.get("function") {
                         if let Some(name) = fn_.get("name").and_then(|n| n.as_str()) {
                             if !name.is_empty() {
-                                if let Some(f) = t.get_mut("function").and_then(|f| f.as_object_mut()) {
+                                if let Some(f) =
+                                    t.get_mut("function").and_then(|f| f.as_object_mut())
+                                {
                                     f.insert("name".into(), Value::String(name.to_string()));
                                 }
                             }
@@ -477,7 +522,10 @@ impl crate::Provider for Cline {
         &'a self,
         client: &'a Client,
         cfg: &'a proxy_fire_core::config::ProviderConfig,
-    ) -> futures::future::BoxFuture<'a, Result<Vec<proxy_fire_core::catalog::CatalogEntry>, crate::ProviderError>> {
+    ) -> futures::future::BoxFuture<
+        'a,
+        Result<Vec<proxy_fire_core::catalog::CatalogEntry>, crate::ProviderError>,
+    > {
         Box::pin(async move {
             let mut raws: Vec<crate::RawModel> = SEED_FREE_MODELS
                 .iter()
@@ -536,8 +584,14 @@ impl crate::Provider for Cline {
                                             context_window: 128_000,
                                             metadata: Some({
                                                 let mut m = serde_json::Map::new();
-                                                m.insert("source".into(), Value::String("cline".into()));
-                                                m.insert("requires_stream".into(), Value::Bool(true));
+                                                m.insert(
+                                                    "source".into(),
+                                                    Value::String("cline".into()),
+                                                );
+                                                m.insert(
+                                                    "requires_stream".into(),
+                                                    Value::Bool(true),
+                                                );
                                                 m
                                             }),
                                         });
@@ -556,12 +610,16 @@ impl crate::Provider for Cline {
                                 );
                             }
                             Err(e) => {
-                                tracing::info!("cline: recommended-models sync failed: {e} — using seed list");
+                                tracing::info!(
+                                    "cline: recommended-models sync failed: {e} — using seed list"
+                                );
                             }
                         }
                     }
                     Err(e) => {
-                        tracing::info!("cline: token refresh for scan failed: {e} — using seed list");
+                        tracing::info!(
+                            "cline: token refresh for scan failed: {e} — using seed list"
+                        );
                     }
                 }
             }

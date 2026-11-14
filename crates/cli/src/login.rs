@@ -119,7 +119,10 @@ async fn cline_login(p: &ProviderConfig) -> Result<()> {
     println!("  1. Open this URL in your browser:\n     {url}");
     println!("  2. Confirm the code: \x1b[1m{}\x1b[0m", device.user_code);
     println!("  3. Sign in with Google, GitHub, or email\n");
-    println!("  \x1b[2mwaiting for approval ({} min) ...\x1b[0m", device.expires_in_secs / 60);
+    println!(
+        "  \x1b[2mwaiting for approval ({} min) ...\x1b[0m",
+        device.expires_in_secs / 60
+    );
 
     let tokens = proxy_fire_providers::cline::poll_device_token(
         &client,
@@ -151,7 +154,10 @@ async fn cline_login(p: &ProviderConfig) -> Result<()> {
             }
         }
         if slot == 0 {
-            anyhow::bail!("all 9 account slots are occupied (remove one from {})", env_file_path().display());
+            anyhow::bail!(
+                "all 9 account slots are occupied (remove one from {})",
+                env_file_path().display()
+            );
         }
     }
     save_key(p, &reg.refresh_token, slot)?;

@@ -32,7 +32,7 @@
 >   -d '{"model":"auto","messages":[{"role":"user","content":"In one sentence: why do free LLM tiers run dry?"}]}'
 > ```
 >
-> The `X-Used-Model` header tells you which free model answered. The archive brings its own provider list and a catalog of 250 free models. Windows: the `.zip` on the [releases page](https://github.com/leloush-x/proxy-fire/releases/latest), or Docker (see [Install](#install)).
+> The `X-Used-Model` header tells you which free model answered. The archive brings its own provider list and a catalog of 253 free models. Linux: the `.tar.gz` on the [releases page](https://github.com/leloush-x/proxy-fire/releases/latest), or Docker (see [Install](#install)).
 
 <p align="center">
   <img src="docs/img/fallback.svg" width="860" alt="A real request on 31 October 2026. A tool sends model auto to the proxy on localhost. The proxy first tries Groq kimi-k2, which returns 404 model not found, and puts that model on a one-hour cooldown. It then tries Groq gpt-oss-20b, which answers. The other providers were not needed. The client saw one clean 200 after 0.45 seconds.">
@@ -121,7 +121,7 @@ Use `"model": "coding"`, `"speed"` or any other [strategy](#pick-a-strategy) in 
 |---|---|
 | Binary | one stripped Rust binary, no runtime to install |
 | Memory | a few MB resident when idle (catalog of 250 models loaded) |
-| Builds for | `linux/amd64` + `linux/arm64` (static musl), macOS (Intel + Apple Silicon), Windows |
+| Builds for | `linux/amd64` + `linux/arm64` (static musl) |
 
 Prebuilt binaries are on the releases page (static musl for Linux). To build for other targets, cross-compile from any machine with Rust and copy the result over:
 
@@ -197,7 +197,7 @@ The router spreads load across the pool round-robin, retries the same model with
 | | Command |
 |---|---|
 | **Docker** (amd64, arm64) | `docker run --rm -p 127.0.0.1:8080:8080 -e GROQ_API_KEY=gsk_... ghcr.io/leloush-x/proxy-fire:latest` |
-| **Archive** (Linux, macOS, Windows) | `.tar.gz` / `.zip` on the [releases page](https://github.com/leloush-x/proxy-fire/releases/latest); keep `configs/` next to the binaries |
+| **Archive** (Linux) | `.tar.gz` on the [releases page](https://github.com/leloush-x/proxy-fire/releases/latest); keep `configs/` next to the binaries |
 | **cargo** | `cargo install --git https://github.com/leloush-x/proxy-fire proxy-fire --bin proxy-fire` (binary only, so pass `-c config.yaml`) |
 | **From source** | `git clone … && make build` (the binary lands in `bin/`) |
 
