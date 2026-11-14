@@ -1204,7 +1204,7 @@ dependencies = [
 
 [[package]]
 name = "proxy-fire"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1217,6 +1217,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1224,7 +1225,7 @@ dependencies = [
 
 [[package]]
 name = "proxy-fire-core"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -1241,7 +1242,7 @@ dependencies = [
 
 [[package]]
 name = "proxy-fire-providers"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "chrono",
  "futures",
@@ -1256,7 +1257,7 @@ dependencies = [
 
 [[package]]
 name = "proxy-fire-proxy"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "axum",
  "chrono",
@@ -1276,7 +1277,7 @@ dependencies = [
 
 [[package]]
 name = "proxy-fire-scan"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "chrono",
  "futures",

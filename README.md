@@ -205,7 +205,7 @@ Every package ships one binary plus `configs/` (the provider definitions and the
 
 | Binary | Does |
 |---|---|
-| `proxy-fire` | **the one binary** — the OpenAI-compatible proxy, plus `scan` subcommands (`scan update`, `scan probe`, `scan refresh-llm`, `scan export-md`) and `bench` for benchmarking |
+| `proxy-fire` | **the one binary** — the OpenAI-compatible proxy, plus `scan` subcommands (`scan update`, `scan probe`, `scan refresh-llm`, `scan export-md`) and `bench` for benchmarking; `proxy-fire update` self-updates from the latest GitHub release |
 
 <details>
 <summary><b>Install, step by step</b></summary>

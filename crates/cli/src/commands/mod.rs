@@ -3,3 +3,4 @@
 pub mod bench;
 pub mod scan;
 pub mod serve;
+pub mod update;

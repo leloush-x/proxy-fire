@@ -10,6 +10,7 @@
 //!   proxy-fire scan refresh-llm      LLM-powered catalog diff
 //!   proxy-fire scan export-md        render FREE_MODELS.md
 //!   proxy-fire bench                 benchmark strategies across models
+//!   proxy-fire update [--check]      self-update from the latest GitHub release
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -54,6 +55,12 @@ enum Command {
         catalog: Option<String>,
         #[command(subcommand)]
         command: proxy_fire::commands::scan::ScanCommand,
+    },
+    /// Update proxy-fire itself from the latest GitHub release
+    Update {
+        /// Only check whether an update exists; do not install
+        #[arg(long)]
+        check: bool,
     },
     /// Benchmark strategies across free models
     Bench {
@@ -101,6 +108,7 @@ async fn main() -> Result<()> {
             }
             proxy_fire::commands::scan::run(command, cfg, &cfg_file).await
         }
+        Some(Command::Update { check }) => proxy_fire::commands::update::run(check).await,
         Some(Command::Bench { strategies, json }) => {
             proxy_fire::commands::bench::run_cmd(&cfg_file, strategies, json).await
         }
