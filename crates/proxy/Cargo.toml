@@ -1,0 +1,24 @@
+[package]
+name = "proxy-fire-proxy"
+description = "OpenAI-compatible HTTP proxy, fallback chain and SSE synthesis"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+proxy-fire-core.workspace = true
+proxy-fire-providers.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+axum.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+http.workspace = true
+hyper.workspace = true
+futures.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+sha2.workspace = true

@@ -1,6 +1,6 @@
-# free-llm-proxy-router configuration
+# proxy-fire configuration
 # IMPORTANT: Free tier limits change without notice.
-# Run: free-llm-scan refresh-llm  to update with current limits.
+# Run: proxy-fire scan refresh-llm  to update with current limits.
 # Live limits tracker: https://github.com/cheahjs/free-llm-api-resources
 #
 # Providers from "zai" onward were added from the free-llm.com list (data:
@@ -8,7 +8,7 @@
 # enabled (they stay idle until their key is in .env). "Mixed", credit, keyless and local
 # providers ship disabled: review them, then set enabled: true.
 #
-# How the router reads provider fields (checked against pkg/config and pkg/scan):
+# How the router reads provider fields (checked against crates/core/src/config.rs and crates/providers):
 #   priority      informational only. Routing order comes from the strategy, not this number.
 #   tier_type     "free" (rate-limited) or "credit" (token / $ / unit allowance). The
 #                 `economical` strategy ranks credit tiers last. Default: free.
@@ -16,7 +16,7 @@
 #   free_markers, probe_for_free: parsed but not used by the generic scanner.
 #   Only openrouter, groq, gemini, huggingface and github-models have a dedicated scanner.
 #   Every other provider uses the generic /models scan, which marks ALL listed models as
-#   free. Providers tagged "mixed" below also sell paid models: run `free-llm-scan update`
+#   free. Providers tagged "mixed" below also sell paid models: run `proxy-fire scan update`
 #   and prune the catalog before enabling them.
 #   A provider whose api_key_env has no key is skipped at routing time, so enabling one by
 #   mistake is harmless: enabled: true with api_key_env acts as "enabled when the key is
@@ -106,8 +106,8 @@ refresh:
   output_merge: "conservative"
 
 catalog:
-  path: "~/.free-llm-proxy-router/catalog.json"
-  enriched_path: "~/.free-llm-proxy-router/enriched.json"
+  path: "~/.proxy-fire/catalog.json"
+  enriched_path: "~/.proxy-fire/enriched.json"
   max_age_hours: 24
   auto_scan_on_start: false
 
@@ -147,7 +147,7 @@ providers:
     priority: 1   # First: native multi-model fallback via models[] array
     timeout: "30s"
     extra_headers:
-      HTTP-Referer: "https://github.com/kaiser-data/free-llm-proxy-router"
+      HTTP-Referer: "https://github.com/leloush-x/proxy-fire"
       X-Title: "Free LLM Proxy Router"
     discovery:
       models_endpoint: "/models"
@@ -204,7 +204,7 @@ providers:
     rate_limit_notes: "RPS limits (not RPM). x-ratelimit-reset-tokens is fractional float seconds. Space requests 100ms."
 
   # free-llm.com (Oct 2026) reports GitHub Models was retired by GitHub on 2026-07-30.
-  # Leave disabled unless GitHub still serves your token; confirm with `free-llm-scan update`.
+  # Leave disabled unless GitHub still serves your token; confirm with `proxy-fire scan update`.
   - id: github-models
     name: "GitHub Models"
     base_url: "https://models.inference.ai.azure.com"

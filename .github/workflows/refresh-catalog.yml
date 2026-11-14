@@ -30,15 +30,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: stable
-          check-latest: true
-          cache: true
+      - name: Install Rust
+        run: rustup update stable && rustup default stable
 
       - name: Build scanner
-        run: go build -o bin/free-llm-scan ./cmd/free-llm-scan
+        run: cargo build --release --bin proxy-fire
 
       - name: Scan providers
         env:
@@ -52,11 +48,11 @@ jobs:
           HF_API_KEY: ${{ secrets.HF_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./bin/free-llm-scan -c configs/config.example.yaml --catalog configs/catalog.json \
+          ./target/release/proxy-fire scan -c configs/config.example.yaml --catalog configs/catalog.json \
             update --keep-unscanned --all-providers
 
       - name: Render FREE_MODELS.md
-        run: ./bin/free-llm-scan -c configs/config.example.yaml --catalog configs/catalog.json export-md -o FREE_MODELS.md
+        run: ./target/release/proxy-fire scan -c configs/config.example.yaml --catalog configs/catalog.json export-md -o FREE_MODELS.md
 
       - name: Commit if the model list changed
         run: |

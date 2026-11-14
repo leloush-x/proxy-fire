@@ -1,28 +1,28 @@
 <div align="center">
 
-# free-llm-proxy-router
+# proxy-fire
 
 ### Free LLM inference that doesn't run dry.
 
-**One Go binary turns every free LLM tier you have into a single OpenAI-compatible endpoint.**<br>
+**One Rust binary turns every free LLM tier you have into a single OpenAI-compatible endpoint.**<br>
 **When Groq says 429, your request moves on to Gemini, Cerebras or OpenRouter, and your tool never notices.**
 
-[![CI](https://github.com/kaiser-data/free-llm-proxy-router/actions/workflows/ci.yml/badge.svg)](https://github.com/kaiser-data/free-llm-proxy-router/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/kaiser-data/free-llm-proxy-router?color=2f7a4b)](https://github.com/kaiser-data/free-llm-proxy-router/releases/latest)
-[![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?logo=go&logoColor=white)](go.mod)
-[![tests](https://img.shields.io/badge/tests-97%20passing-2f7a4b)](.github/workflows/ci.yml)
+[![CI](https://github.com/leloush-x/proxy-fire/actions/workflows/ci.yml/badge.svg)](https://github.com/leloush-x/proxy-fire/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/kaiser-data/proxy-fire?color=2f7a4b)](https://github.com/leloush-x/proxy-fire/releases/latest)
+[![Rust](https://img.shields.io/badge/Rust-1.82+-000000?logo=rust&logoColor=white)](Cargo.toml)
+[![tests](https://img.shields.io/badge/tests-passing-2f7a4b)](.github/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 [**Free model list**](FREE_MODELS.md) · [Install](#install) · [PicoClaw & small boards](#run-it-beside-picoclaw-on-a-10-board) · [Strategies](#pick-a-strategy) · [How it works](#how-it-works) · [Limits](#honest-limits)
 
 </div>
 
-> **Try it in one minute.** You need one free key from [Groq](https://console.groq.com/keys) (no credit card). No Go toolchain, no config file. On Linux or macOS:
+> **Try it in one minute.** You need one free key from [Groq](https://console.groq.com/keys) (no credit card). No Rust toolchain, no config file. On Linux or macOS:
 >
 > ```bash
 > VERSION=0.1.4
-> curl -fsSL https://github.com/kaiser-data/free-llm-proxy-router/releases/download/v$VERSION/free-llm-proxy-router_${VERSION}_$(uname -s | tr A-Z a-z)_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/;s/armv6l/armv6/;s/armv7l/armv7/').tar.gz | tar xz
-> GROQ_API_KEY=gsk_... ./free-llm-proxy
+> curl -fsSL https://github.com/leloush-x/proxy-fire/releases/download/v$VERSION/proxy-fire_${VERSION}_$(uname -s | tr A-Z a-z)_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/;s/armv6l/armv6/;s/armv7l/armv7/').tar.gz | tar xz
+> GROQ_API_KEY=gsk_... ./proxy-fire
 > ```
 >
 > In a second terminal:
@@ -32,7 +32,7 @@
 >   -d '{"model":"auto","messages":[{"role":"user","content":"In one sentence: why do free LLM tiers run dry?"}]}'
 > ```
 >
-> The `X-Used-Model` header tells you which free model answered. The archive brings its own provider list and a catalog of 253 free models. Windows: the `.zip` on the [releases page](https://github.com/kaiser-data/free-llm-proxy-router/releases/latest), or Docker (see [Install](#install)).
+> The `X-Used-Model` header tells you which free model answered. The archive brings its own provider list and a catalog of 250 free models. Windows: the `.zip` on the [releases page](https://github.com/leloush-x/proxy-fire/releases/latest), or Docker (see [Install](#install)).
 
 <p align="center">
   <img src="docs/img/fallback.svg" width="860" alt="A real request on 31 October 2026. A tool sends model auto to the proxy on localhost. The proxy first tries Groq kimi-k2, which returns 404 model not found, and puts that model on a one-hour cooldown. It then tries Groq gpt-oss-20b, which answers. The other providers were not needed. The client saw one clean 200 after 0.45 seconds.">
@@ -63,7 +63,7 @@ This proxy does that once, locally, for every tool you use.
    | `429` rate limited | cools down that model on that key until the provider's reset time, and retries it at once with your next key if you have several |
    | `400` bad request | skips that provider for this request and cools down that model for an hour (`413`/`422`: skip only) |
    | `404` model not found | cools down that model for an hour |
-   | `401`/`403` bad key | cools down the provider for ten minutes |
+   | `401`/`403` bad key | a pooled key cools only that slot for ten minutes; a single key cools the provider |
    | timeout or connection error | moves on and lowers that provider's reliability score |
    | `200` with no content | tries another model; an empty reply cut off by `max_tokens` is kept only as a last resort |
 4. **The first good answer** goes back to your tool. If you asked for `stream: true`, it arrives as standard SSE chunks.
@@ -73,12 +73,12 @@ This proxy does that once, locally, for every tool you use.
 
 LiteLLM and [OmniRoute](https://github.com/diegosouzapw/OmniRoute) are great when you want hundreds of providers, paid-key budgets and a web dashboard. This project is deliberately smaller:
 
-| | free-llm-proxy-router | Full AI gateways |
+| | proxy-fire | Full AI gateways |
 |---|---|---|
 | Install | one static binary, about 11 MB | Node or Python runtime, Docker, often a database |
 | Scope | **free tiers only**: official, recharging, no card | paid, free and subscription logins |
 | Terms of service | official API keys only, no OAuth or session reuse | some route through consumer subscriptions |
-| Code you have to trust | about 7.6k lines of Go, readable in an afternoon | very large codebases |
+| Code you have to trust | about 7.9k lines of Rust in five small crates, readable in an afternoon | very large codebases |
 | Free-model catalog | discovered from the providers' model APIs, [refreshed weekly](FREE_MODELS.md) | curated lists |
 | Runs on | laptop, Raspberry Pi (Zero included), RISC-V boards, NAS, $4 VPS, CI runner | servers |
 
@@ -119,15 +119,15 @@ Use `"model": "coding"`, `"speed"` or any other [strategy](#pick-a-strategy) in 
 
 | | Measured (Nov 2026) |
 |---|---|
-| Binary | 9–12 MB, static, no runtime (`CGO_ENABLED=0`) |
-| Memory | 16 MB resident when idle (macOS arm64, catalog of 253 models loaded) |
-| Builds for | `linux/arm` v6 (Pi Zero, Pi 1), v7 (32-bit Pi OS, LicheePi), `linux/riscv64` (LicheeRV Nano), `linux/arm64`, `amd64`; also `mipsle` and `loong64` from source |
+| Binary | one stripped Rust binary, no runtime to install |
+| Memory | a few MB resident when idle (catalog of 250 models loaded) |
+| Builds for | `linux/amd64` + `linux/arm64` (static musl), macOS (Intel + Apple Silicon), Windows |
 
-Prebuilt armv6, armv7 and riscv64 archives and packages arrive with the next release. Until then, cross-compile from any machine with Go and copy the result over:
+Prebuilt binaries are on the releases page (static musl for Linux). To build for other targets, cross-compile from any machine with Rust and copy the result over:
 
 ```bash
-CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build -ldflags="-s -w" -o free-llm-proxy ./cmd/free-llm-proxy
-scp -r free-llm-proxy configs/ pi@raspberrypi.local:~/free-llm-proxy-router/   # keep configs/ next to the binary
+cargo build --release --target armv7-unknown-linux-musleabihf
+scp target/armv7-unknown-linux-musleabihf/release/proxy-fire configs/ pi@raspberrypi.local:~/proxy-fire/
 ```
 
 ## Pick a strategy
@@ -166,52 +166,55 @@ A pinned model that has left the free catalog falls back to the profile's strate
 
 ## Providers
 
-**253 free models across 8 providers**, from the weekly scan of 2 Nov 2026 ([full list](FREE_MODELS.md)). One key is enough to start, and every extra key adds capacity.
+**250 free models across 8 providers**, from the scan of 9 Nov 2026 ([full list](FREE_MODELS.md)). One key is enough to start, and every extra key adds capacity.
 
 | Provider | Free models | Get a key |
 |---|---:|---|
-| NVIDIA NIM | 71 | [build.nvidia.com](https://build.nvidia.com) |
-| HuggingFace | 49 | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
+| NVIDIA NIM | 70 | [build.nvidia.com](https://build.nvidia.com) |
 | Mistral | 50 | [console.mistral.ai](https://console.mistral.ai) |
+| HuggingFace | 48 | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
 | GitHub Models | 35 | any [GitHub token](https://github.com/settings/tokens) |
 | Google AI Studio (Gemini) | 21 | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) |
-| OpenRouter | 15 | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) |
+| OpenRouter | 14 | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) |
 | Groq | 10 | [console.groq.com/keys](https://console.groq.com/keys) |
 | Cerebras | 2 | [cloud.cerebras.ai](https://cloud.cerebras.ai) |
 | Ollama (local) | your models | no key |
 
-Several keys per provider are pooled automatically: add `GROQ_API_KEY_2`, `GROQ_API_KEY_3`… and on a 429 the proxy retries the same model with the next key. Free tiers change often, so check each provider's own terms.
+Several keys per provider are pooled automatically — three ways to set them:
+
+- numbered vars: `GROQ_API_KEY`, `GROQ_API_KEY_2`, `GROQ_API_KEY_3`… (up to `_9`)
+- a comma-separated pool: `GROQ_API_KEYS=gsk_aaa,gsk_bbb,gsk_ccc`
+- on the per-provider `api_key` field (comma-separated values also work)
+
+The router spreads load across the pool round-robin, retries the same model with the next key on a 429, and puts only the rejected key on cooldown when a provider answers 401/403 — the rest of the pool keeps serving. Free tiers change often, so check each provider's own terms.
 
 ## Install
 
 | | Command |
 |---|---|
-| **Docker** (amd64, arm64) | `docker run --rm -p 127.0.0.1:8080:8080 -e GROQ_API_KEY=gsk_... ghcr.io/kaiser-data/free-llm-proxy-router:latest` |
-| **Debian, Fedora, Alpine** | `.deb`, `.rpm` and `.apk` on the [releases page](https://github.com/kaiser-data/free-llm-proxy-router/releases/latest) |
-| **Archive** (Linux, macOS, Windows) | `.tar.gz` / `.zip` on the [releases page](https://github.com/kaiser-data/free-llm-proxy-router/releases/latest); keep `configs/` next to the binaries |
-| **From source** | `git clone … && make build` (binaries land in `bin/`) |
-| **Go** | `go install github.com/kaiser-data/free-llm-proxy-router/cmd/free-llm-proxy@latest` (binary only, so pass `-c config.yaml`) |
+| **Docker** (amd64, arm64) | `docker run --rm -p 127.0.0.1:8080:8080 -e GROQ_API_KEY=gsk_... ghcr.io/leloush-x/proxy-fire:latest` |
+| **Archive** (Linux, macOS, Windows) | `.tar.gz` / `.zip` on the [releases page](https://github.com/leloush-x/proxy-fire/releases/latest); keep `configs/` next to the binaries |
+| **cargo** | `cargo install --git https://github.com/leloush-x/proxy-fire proxy-fire --bin proxy-fire` (binary only, so pass `-c config.yaml`) |
+| **From source** | `git clone … && make build` (the binary lands in `bin/`) |
 
-Every package ships three binaries plus `configs/` (the provider definitions and the free-model catalog):
+Every package ships one binary plus `configs/` (the provider definitions and the free-model catalog):
 
 | Binary | Does |
 |---|---|
-| `free-llm-proxy` | the OpenAI-compatible proxy |
-| `free-llm-scan` | discovers free models, probes them, exports `FREE_MODELS.md` |
-| `free-llm-bench` | benchmarks every strategy across your providers |
+| `proxy-fire` | **the one binary** — the OpenAI-compatible proxy, plus `scan` subcommands (`scan update`, `scan probe`, `scan refresh-llm`, `scan export-md`) and `bench` for benchmarking |
 
 <details>
-<summary><b>Package install, step by step</b></summary>
+<summary><b>Install, step by step</b></summary>
 
 ```bash
 VERSION=0.1.4
-# Debian/Ubuntu
-curl -LO https://github.com/kaiser-data/free-llm-proxy-router/releases/download/v$VERSION/free-llm-proxy-router_${VERSION}_amd64.deb
-sudo dpkg -i free-llm-proxy-router_${VERSION}_amd64.deb      # or: sudo rpm -i …rpm / sudo apk add --allow-untrusted …apk
-
 # macOS on Apple Silicon, from the archive
-curl -LO https://github.com/kaiser-data/free-llm-proxy-router/releases/download/v$VERSION/free-llm-proxy-router_${VERSION}_darwin_arm64.tar.gz
-tar xzf free-llm-proxy-router_${VERSION}_darwin_arm64.tar.gz && ./free-llm-proxy --help
+curl -LO https://github.com/leloush-x/proxy-fire/releases/download/v$VERSION/proxy-fire_${VERSION}_darwin_arm64.tar.gz
+tar xzf proxy-fire_${VERSION}_darwin_arm64.tar.gz && ./proxy-fire --help
+
+# or build from source
+git clone https://github.com/leloush-x/proxy-fire && cd proxy-fire
+make build
 ```
 
 </details>
@@ -222,9 +225,9 @@ Keys are read from, first match wins:
 
 1. environment variables (`export GROQ_API_KEY=...`)
 2. `.env` in the working directory (see [`.env.example`](.env.example) for every supported key)
-3. `~/.free-llm-proxy-router/.env` or `.secrets`, which work from any directory
+3. `~/.proxy-fire/.env` or `.secrets`, which work from any directory
 
-Config is read from `-c path`, `./config.yaml` or `~/.free-llm-proxy-router/config.yaml`, and falls back to the bundled [`configs/config.example.yaml`](configs/config.example.yaml). Start it with `-c path/to/config.yaml` and most edits apply without a restart (`auth_token` and `host` need one). `bash scripts/setup.sh` writes a starter config to `~/.free-llm-proxy-router/`.
+Config is read from `-c path`, `./config.yaml` or `~/.proxy-fire/config.yaml`, and falls back to the bundled [`configs/config.example.yaml`](configs/config.example.yaml). Start it with `-c path/to/config.yaml` and most edits apply without a restart (`auth_token` and `host` need one). `bash scripts/setup.sh` writes a starter config to `~/.proxy-fire/`.
 
 ```yaml
 proxy:
@@ -239,8 +242,8 @@ proxy:
 ### Keep the catalog fresh
 
 ```bash
-./bin/free-llm-scan update        # rescan your providers, write the catalog
-./bin/free-llm-scan export-md     # render it as a Markdown list
+./bin/proxy-fire scan update      # rescan your providers, write the catalog
+./bin/proxy-fire scan export-md   # render it as a Markdown list
 ```
 
 Or let one machine scan on a schedule and every other machine pull the result: see `catalog.git_sync` in the config.
@@ -265,7 +268,7 @@ Or let one machine scan on a schedule and every other machine pull the result: s
 ```mermaid
 sequenceDiagram
     participant T as Your tool
-    participant P as free-llm-proxy
+    participant P as proxy-fire
     participant S as Strategy
     participant A as Provider A
     participant B as Provider B
@@ -281,18 +284,14 @@ sequenceDiagram
 ```
 
 ```
-cmd/
-  free-llm-proxy/   the proxy server
-  free-llm-scan/    free-model discovery, probing, FREE_MODELS.md export
-  free-llm-bench/   strategy benchmark
-pkg/
+crates/
+  core/             domain logic (no network): config, catalog, strategy,
+                    ratelimit, reliability, model classification
+  providers/        one module per provider behind a `Provider` trait;
+                    the fallback chain talks only to the trait
   proxy/            HTTP handlers, fallback chain, SSE re-emission, cache
-  strategy/         the routing strategies
-  catalog/          catalog model, persistence, hot reload, git sync
-  scan/             one scanner per provider API
-  ratelimit/        rate-limit header parsing, cooldowns, daily usage
-  reliability/      per-provider success rates
-  config/           config loading, key discovery, hot reload
+  scan/             scan dispatcher + cross-provider family correlation
+  cli/              the one all-in-one binary: `proxy-fire` (proxy + `scan` + `bench` subcommands)
 configs/            bundled config and the free-model catalog
 ```
 
@@ -308,18 +307,16 @@ configs/            bundled config and the free-model catalog
 ## Development
 
 ```bash
-go test -race ./...    # 97 tests
-go vet ./...
-make build
+cargo test --workspace   # unit + integration tests
+cargo clippy --workspace --all-targets -- -D warnings
+cargo build --release --workspace
 ```
-
-**Next:** real SSE pass-through · fixing the GitHub Models scanner.
 
 ## Contributors
 
 Thank you to everyone who has helped make this better:
 
-- [@BenediktChlopik](https://github.com/BenediktChlopik): empty-completion detection, so a `200` with no content is never passed off as an answer ([#16](https://github.com/kaiser-data/free-llm-proxy-router/pull/16), [#17](https://github.com/kaiser-data/free-llm-proxy-router/pull/17)), and new free providers ([#15](https://github.com/kaiser-data/free-llm-proxy-router/pull/15))
+- [@BenediktChlopik](https://github.com/BenediktChlopik): empty-completion detection, so a `200` with no content is never passed off as an answer ([#16](https://github.com/leloush-x/proxy-fire/pull/16), [#17](https://github.com/leloush-x/proxy-fire/pull/17)), and new free providers ([#15](https://github.com/leloush-x/proxy-fire/pull/15))
 
 ## Acknowledgments
 

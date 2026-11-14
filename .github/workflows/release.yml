@@ -9,25 +9,106 @@ permissions:
   packages: write
 
 jobs:
-  goreleaser:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Rust
+        run: rustup update stable && rustup default stable
+      - name: Run tests
+        run: cargo test --workspace
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest, musl: true, pkg: linux_amd64, ext: tar.gz }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm, musl: true, pkg: linux_arm64, ext: tar.gz }
+          - { target: x86_64-apple-darwin,      os: macos-13,       pkg: darwin_amd64, ext: tar.gz }
+          - { target: aarch64-apple-darwin,     os: macos-14,       pkg: darwin_arm64, ext: tar.gz }
+          - { target: x86_64-pc-windows-msvc,   os: windows-latest, pkg: windows_amd64, ext: zip }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          rustup update stable && rustup default stable
+          rustup target add ${{ matrix.target }}
+
+      - name: Install musl toolchain (Linux only)
+        if: matrix.musl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Build release binaries
+        run: cargo build --release --locked --target ${{ matrix.target }} --bin proxy-fire
+
+      - name: Stage package
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          STAGE="stage"
+          mkdir -p "$STAGE"
+          BIN_DIR="target/${{ matrix.target }}/release"
+          if [[ "${{ matrix.ext }}" == "zip" ]]; then
+            cp "$BIN_DIR"/proxy-fire.exe "$STAGE"/
+          else
+            cp "$BIN_DIR"/proxy-fire "$STAGE"/
+          fi
+          cp -r configs "$STAGE"/
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Create archive (tar.gz)
+        if: matrix.ext == 'tar.gz'
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          PKG="proxy-fire_${VERSION}_${{ matrix.pkg }}.tar.gz"
+          tar -C stage -czf "$PKG" .
+          echo "PKG=$PKG" >> "$GITHUB_ENV"
+
+      - name: Create archive (zip)
+        if: matrix.ext == 'zip'
+        shell: pwsh
+        run: |
+          $VERSION = "${env:GITHUB_REF_NAME}".TrimStart('v')
+          $PKG = "proxy-fire_${VERSION}_${{ matrix.pkg }}.zip"
+          Compress-Archive -Path (Get-ChildItem stage) -DestinationPath $PKG
+          "PKG=$PKG" | Out-File -Append -FilePath $env:GITHUB_ENV
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
         with:
-          fetch-depth: 0
+          name: pkg-${{ matrix.pkg }}
+          path: ${{ github.workspace }}/proxy-fire_*
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download packages
+        uses: actions/download-artifact@v4
         with:
-          go-version: stable # go.mod sets the minimum; build with a supported, patched toolchain
-          check-latest: true
-          cache: true
+          path: dist
+          merge-multiple: true
 
-      - name: Run unit tests
-        run: go test ./... -count=1 -timeout 60s
+      - name: Generate checksums
+        run: |
+          cd dist && sha256sum proxy-fire_* > checksums.txt
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/proxy-fire_*
+            dist/checksums.txt
+          generate_release_notes: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -39,12 +120,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
         with:
-          distribution: goreleaser
-          version: "~> v2"
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ github.ref_name }}

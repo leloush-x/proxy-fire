@@ -16,25 +16,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: stable # go.mod sets the minimum; build with a supported, patched toolchain
-          check-latest: true
-          cache: true
+      - name: Install Rust
+        run: rustup update stable && rustup default stable && rustup component add clippy rustfmt
 
-      - name: go vet
-        run: go vet ./...
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
 
-      - name: Build all binaries
-        run: make build
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Run unit tests
-        run: go test ./... -count=1 -timeout 60s
+      - name: Build release
+        run: cargo build --release --workspace
+
+      - name: Run tests
+        run: cargo test --workspace
 
       - name: Check binary sizes
         run: |
-          for bin in bin/free-llm-*; do
+          for bin in target/release/proxy-fire; do
             size=$(stat -c%s "$bin")
             maxsize=$((16 * 1024 * 1024))  # 16MB
             echo "$bin: $(numfmt --to=iec $size)"

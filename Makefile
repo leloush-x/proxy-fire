@@ -1,59 +1,41 @@
-.PHONY: all build test lint clean install-tools help
+.PHONY: all build build-release test lint fmt vet clean size help
 
-GOBIN ?= $(shell go env GOPATH)/bin
-GOCMD = $(shell which go || echo /home/marty/go-sdk/go/bin/go)
-LDFLAGS = -trimpath -ldflags="-s -w"
+CARGO ?= cargo
 BINDIR = bin
 
 all: build
 
-build: ## Build all three binaries
+build: ## Build the all-in-one binary (debug)
 	@mkdir -p $(BINDIR)
-	$(GOCMD) build $(LDFLAGS) -o $(BINDIR)/free-llm-proxy ./cmd/free-llm-proxy
-	$(GOCMD) build $(LDFLAGS) -o $(BINDIR)/free-llm-scan ./cmd/free-llm-scan
-	$(GOCMD) build $(LDFLAGS) -o $(BINDIR)/free-llm-bench ./cmd/free-llm-bench
-	@echo "Built: $(BINDIR)/free-llm-proxy, $(BINDIR)/free-llm-scan, $(BINDIR)/free-llm-bench"
+	$(CARGO) build --workspace
+	cp target/debug/proxy-fire $(BINDIR)/
+	@echo "Built: $(BINDIR)/proxy-fire"
 
-build-proxy: ## Build only the proxy binary
+build-release: ## Build the all-in-one binary (release, thin LTO, stripped)
 	@mkdir -p $(BINDIR)
-	$(GOCMD) build $(LDFLAGS) -o $(BINDIR)/free-llm-proxy ./cmd/free-llm-proxy
+	$(CARGO) build --release --locked
+	cp target/release/proxy-fire $(BINDIR)/
+	@echo "Built: $(BINDIR)/proxy-fire"
 
-build-scan: ## Build only the scan binary
-	@mkdir -p $(BINDIR)
-	$(GOCMD) build $(LDFLAGS) -o $(BINDIR)/free-llm-scan ./cmd/free-llm-scan
+test: ## Run unit + integration tests
+	$(CARGO) test --workspace
 
-build-bench: ## Build only the bench binary
-	@mkdir -p $(BINDIR)
-	$(GOCMD) build $(LDFLAGS) -o $(BINDIR)/free-llm-bench ./cmd/free-llm-bench
+vet: ## Run clippy
+	$(CARGO) clippy --workspace --all-targets -- -D warnings
 
-test: ## Run unit tests
-	$(GOCMD) test ./... -count=1
+lint: vet
 
-test-verbose: ## Run unit tests with verbose output
-	$(GOCMD) test -v ./... -count=1
+fmt: ## Format the code
+	$(CARGO) fmt --all
 
-test-integration: ## Run integration tests (requires API keys)
-	$(GOCMD) test -tags=integration ./... -count=1
-
-vet: ## Run go vet
-	$(GOCMD) vet ./...
-
-lint: ## Run golangci-lint (install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
-	@which golangci-lint > /dev/null 2>&1 || (echo "golangci-lint not found; run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest" && exit 1)
-	golangci-lint run ./...
-
-install-tools: ## Install development tools
-	$(GOCMD) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+fmt-check: ## Check formatting (CI)
+	$(CARGO) fmt --all -- --check
 
 clean: ## Remove build artifacts
-	rm -rf $(BINDIR)
-	$(GOCMD) clean -cache
+	rm -rf $(BINDIR) target
 
-tidy: ## Tidy go.mod and go.sum
-	$(GOCMD) mod tidy
+size: build-release ## Show binary size
+	@ls -lh $(BINDIR)/proxy-fire
 
-size: build ## Show binary sizes
-	@ls -lh $(BINDIR)/free-llm-*
-
-help: ## Display this help
+help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'

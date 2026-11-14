@@ -1,0 +1,28 @@
+[package]
+name = "proxy-fire"
+description = "proxy-fire: OpenAI-compatible proxy for free LLM providers, in one binary"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "proxy-fire"
+path = "src/bin/proxy_fire.rs"
+
+[dependencies]
+proxy-fire-core.workspace = true
+proxy-fire-providers.workspace = true
+proxy-fire-proxy.workspace = true
+proxy-fire-scan.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+reqwest.workspace = true
+libc.workspace = true

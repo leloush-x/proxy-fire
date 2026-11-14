@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="920" height="380" viewBox="0 0 920 380" role="img" aria-labelledby="t d">
-  <title id="t">One request through free-llm-proxy-router</title>
+  <title id="t">One request through proxy-fire</title>
   <desc id="d">A real request on 31 October 2026. The client sends model auto to localhost. The proxy tries Groq kimi-k2, which returns 404 model not found, puts that model on a one-hour cooldown, then tries Groq gpt-oss-20b, which answers with 200. The other providers and OpenRouter's free router were not needed. The client saw one clean 200 after 0.45 seconds.</desc>
   <style>
     .sans { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
@@ -20,8 +20,8 @@
 
   <!-- proxy -->
   <rect x="294" y="96" width="210" height="180" rx="12" fill="#1f1d1a"/>
-  <text x="314" y="126" class="sans" font-size="12" fill="#b9b4a7" letter-spacing="1">ONE GO BINARY</text>
-  <text x="314" y="154" class="sans" font-size="18" font-weight="700" fill="#ffffff">free-llm-proxy</text>
+  <text x="314" y="126" class="sans" font-size="12" fill="#b9b4a7" letter-spacing="1">ONE RUST BINARY</text>
+  <text x="314" y="154" class="sans" font-size="18" font-weight="700" fill="#ffffff">proxy-fire</text>
   <text x="314" y="178" class="mono" font-size="12.5" fill="#e9e5da">127.0.0.1:8080/v1</text>
   <text x="314" y="212" class="sans" font-size="13" fill="#d8d3c6">ranks 257 free models,</text>
   <text x="314" y="231" class="sans" font-size="13" fill="#d8d3c6">skips cooled-down ones,</text>

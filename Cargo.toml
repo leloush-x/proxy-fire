@@ -1,0 +1,52 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/providers", "crates/proxy", "crates/scan", "crates/cli"]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+repository = "https://github.com/leloush-x/proxy-fire"
+
+# Extremely fast, small, stripped binaries. Thin LTO + default CGUs build
+# much faster on small machines with nearly identical runtime perf.
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 16
+panic = "unwind"
+strip = true
+
+[workspace.dependencies]
+# Async runtime / HTTP
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.8", features = ["json", "macros"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "gzip", "brotli"] }
+hyper = { version = "1", features = ["full"] }
+http = "1"
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml_ng = "0.10"
+# CLI / logging / errors
+clap = { version = "4", features = ["derive", "env"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
+thiserror = "2"
+# Time / utils
+chrono = { version = "0.4", features = ["serde"] }
+futures = "0.3"
+notify = "8"
+tempfile = "3"
+
+proxy-fire-core = { path = "crates/core" }
+proxy-fire-providers = { path = "crates/providers" }
+proxy-fire-proxy = { path = "crates/proxy" }
+proxy-fire-scan = { path = "crates/scan" }
+chrono-tz = "0.10"
+regex = "1"
+humantime = "2"
+sha2 = "0.10"
+libc = "0.2"
