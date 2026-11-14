@@ -113,29 +113,6 @@ fn choice_index(ch: &Value, fallback: usize) -> i64 {
         .unwrap_or(fallback as i64)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn synthesizes_content_and_finish_chunks() {
-        let body = br#"{"id":"x","created":1,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":1}}"#;
-        let sse = write_completion_as_sse(body);
-        let text = String::from_utf8(sse).unwrap();
-        assert!(text.contains("data: "));
-        assert!(text.contains("chat.completion.chunk"));
-        assert!(text.contains("\"content\":\"hi\""));
-        assert!(text.contains("\"finish_reason\":\"stop\""));
-        assert!(text.contains("data: [DONE]\n\n"));
-    }
-
-    #[test]
-    fn passes_through_non_completion_bodies() {
-        let body = b"garbage";
-        assert_eq!(write_completion_as_sse(body), body);
-    }
-}
-
 /// Re-emit a buffered chat completion as legacy text_completion chunks.
 /// Legacy clients (`/v1/completions`) expect `object: "text_completion"`.
 pub fn write_text_completion_as_sse(body: &[u8]) -> Vec<u8> {
@@ -208,4 +185,27 @@ pub fn write_text_completion_as_sse(body: &[u8]) -> Vec<u8> {
     }
     out.push_str("data: [DONE]\n\n");
     out.into_bytes()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn synthesizes_content_and_finish_chunks() {
+        let body = br#"{"id":"x","created":1,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":1}}"#;
+        let sse = write_completion_as_sse(body);
+        let text = String::from_utf8(sse).unwrap();
+        assert!(text.contains("data: "));
+        assert!(text.contains("chat.completion.chunk"));
+        assert!(text.contains("\"content\":\"hi\""));
+        assert!(text.contains("\"finish_reason\":\"stop\""));
+        assert!(text.contains("data: [DONE]\n\n"));
+    }
+
+    #[test]
+    fn passes_through_non_completion_bodies() {
+        let body = b"garbage";
+        assert_eq!(write_completion_as_sse(body), body);
+    }
 }
