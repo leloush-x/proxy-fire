@@ -218,22 +218,30 @@ async fn run_inner(cfg: Config, cfg_file: String) -> Result<()> {
     {
         let save = save_fn.clone();
         tokio::spawn(async move {
-            let mut sigint =
-                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
-                    .expect("SIGINT handler");
-            let mut sigterm =
-                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                    .expect("SIGTERM handler");
-            let mut sigtstp = tokio::signal::unix::signal(
-                tokio::signal::unix::SignalKind::from_raw(libc::SIGTSTP),
-            )
-            .expect("SIGTSTP handler");
-            tokio::select! {
-                _ = sigint.recv() => {},
-                _ = sigterm.recv() => {},
-                _ = sigtstp.recv() => {},
+            // Unix: SIGINT / SIGTERM / SIGTSTP all kill totally (no suspension).
+            #[cfg(unix)]
+            {
+                let mut sigint =
+                    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+                        .expect("SIGINT handler");
+                let mut sigterm =
+                    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                        .expect("SIGTERM handler");
+                let mut sigtstp = tokio::signal::unix::signal(
+                    tokio::signal::unix::SignalKind::from_raw(libc::SIGTSTP),
+                )
+                .expect("SIGTSTP handler");
+                tokio::select! {
+                    _ = sigint.recv() => {},
+                    _ = sigterm.recv() => {},
+                    _ = sigtstp.recv() => {},
+                }
             }
-            tracing::info!("proxy: killed (SIGINT/SIGTSTP/SIGTERM) — saving state and exiting");
+            #[cfg(not(unix))]
+            {
+                tokio::signal::ctrl_c().await.expect("ctrl_c handler");
+            }
+            tracing::info!("proxy: killed (signal) — saving state and exiting");
             save();
             let _ = shutdown_tx.send(());
         });
