@@ -2420,6 +2420,45 @@
         "rate_limit_tier": "low",
         "registry": "azureml"
       }
+    },
+    {
+      "provider_id": "cline",
+      "model_id": "deepseek/deepseek-v4-flash",
+      "is_free": true,
+      "tier_type": "free",
+      "context_window": 200000,
+      "discovered_at": "2026-11-14T19:32:08.704Z",
+      "last_verified_at": "2026-11-14T19:32:08.704Z",
+      "metadata": {
+        "source": "cline",
+        "requires_stream": true
+      }
+    },
+    {
+      "provider_id": "cline",
+      "model_id": "poolside/laguna-s-2.1:free",
+      "is_free": true,
+      "tier_type": "free",
+      "context_window": 200000,
+      "discovered_at": "2026-11-14T19:32:08.704Z",
+      "last_verified_at": "2026-11-14T19:32:08.704Z",
+      "metadata": {
+        "source": "cline",
+        "requires_stream": true
+      }
+    },
+    {
+      "provider_id": "cline",
+      "model_id": "stepfun/step-3.7-flash",
+      "is_free": true,
+      "tier_type": "free",
+      "context_window": 200000,
+      "discovered_at": "2026-11-14T19:32:08.704Z",
+      "last_verified_at": "2026-11-14T19:32:08.704Z",
+      "metadata": {
+        "source": "cline",
+        "requires_stream": true
+      }
     }
   ],
   "blocklist": [

@@ -86,9 +86,55 @@ pub fn extract_rate_limit_info(
         "gemini" => extract_gemini(&mut info, &get, body),
         "cerebras" => extract_cerebras(&mut info, &get),
         "groq" => extract_groq(&mut info, &get),
+        "cline" => extract_cline(&mut info, body),
         _ => {}
     }
     info
+}
+
+/// Cline daily-cap 429 (INFERENCE_CAP_ERROR) body → cooldown hint.
+/// Bodies look like: "…INFERENCE_CAP_ERROR… Try again in 17h 59m…".
+/// When the cap is present but unparseable, bench the slot for 18h
+/// (Cline's free quota resets daily).
+fn extract_cline(info: &mut RateLimitInfo, body: &[u8]) {
+    let text = String::from_utf8_lossy(body);
+    let lower = text.to_ascii_lowercase();
+    if !lower.contains("inference_cap") && !lower.contains("try again in") {
+        return;
+    }
+    let ms = proxy_fire_providers_cline_parse_ms(body);
+    if ms > 0 {
+        info.retry_after_ms = ms;
+    } else {
+        // Conservative default: 18h
+        info.retry_after_ms = 18 * 3_600_000;
+    }
+}
+
+// Local copy of the duration parser (core can't depend on providers).
+fn proxy_fire_providers_cline_parse_ms(body: &[u8]) -> i64 {
+    let text = String::from_utf8_lossy(body).to_ascii_lowercase();
+    let Some(idx) = text.find("try again in") else {
+        return 0;
+    };
+    let re = regex::Regex::new(r"(\d+)\s*(h|m|s)").unwrap();
+    let tail = &text[idx..];
+    let mut total: i64 = 0;
+    let mut any = false;
+    for cap in re.captures_iter(tail) {
+        let n: i64 = cap[1].parse().unwrap_or(0);
+        any = true;
+        total += match &cap[2] {
+            "h" => n * 3_600_000,
+            "m" => n * 60_000,
+            _ => n * 1_000,
+        };
+    }
+    if any {
+        total
+    } else {
+        0
+    }
 }
 
 fn extract_gemini(info: &mut RateLimitInfo, get: &dyn Fn(&str) -> Option<String>, body: &[u8]) {

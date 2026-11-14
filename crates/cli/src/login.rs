@@ -27,6 +27,9 @@ pub async fn run(cfg_file: &str) -> Result<()> {
 
 /// Dynamic per-provider flow.
 async fn login_provider(p: &ProviderConfig) -> Result<()> {
+    if p.id.eq_ignore_ascii_case("cline") {
+        return cline_login(p).await;
+    }
     if p.api_key_env.is_empty() {
         println!(
             "  \x1b[32m✓\x1b[0m {} needs no API key (local / keyless). Nothing to save.",
@@ -94,6 +97,76 @@ async fn login_provider(p: &ProviderConfig) -> Result<()> {
     );
 
     add_extra_key(p).await
+}
+
+/// Cline account login — WorkOS device authorization, writes the refresh
+/// token to the first free pool slot (CLINE_REFRESH_TOKEN[_2.._9]).
+async fn cline_login(p: &ProviderConfig) -> Result<()> {
+    println!("  \x1b[36mCline account login\x1b[0m  (WorkOS device authorization)\n");
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .context("http client")?;
+
+    let device = proxy_fire_providers::cline::start_device_auth(&client)
+        .await
+        .map_err(anyhow::Error::msg)
+        .context("starting device authorization")?;
+    let url = device
+        .verification_uri_complete
+        .clone()
+        .unwrap_or_else(|| device.verification_uri.clone());
+    println!("  1. Open this URL in your browser:\n     {url}");
+    println!("  2. Confirm the code: \x1b[1m{}\x1b[0m", device.user_code);
+    println!("  3. Sign in with Google, GitHub, or email\n");
+    println!("  \x1b[2mwaiting for approval ({} min) ...\x1b[0m", device.expires_in_secs / 60);
+
+    let tokens = proxy_fire_providers::cline::poll_device_token(
+        &client,
+        &device.device_code,
+        device.interval_secs,
+        device.expires_in_secs,
+    )
+    .await
+    .map_err(anyhow::Error::msg)
+    .context("device authorization")?;
+    let reg = proxy_fire_providers::cline::register_with_cline(
+        &client,
+        &tokens.access_token,
+        &tokens.refresh_token,
+    )
+    .await
+    .map_err(anyhow::Error::msg)
+    .context("registering with Cline")?;
+    println!("\n  \x1b[32m✓ signed in as {}\x1b[0m", reg.email);
+
+    // First free slot: base var if unset, else the first free _N.
+    let mut slot = 1usize;
+    if !p.missing_key() {
+        slot = 0;
+        for i in 2..=9usize {
+            if proxy_fire_core::dotenv::lookup_env(&format!("{}_{}", p.api_key_env, i)).is_none() {
+                slot = i;
+                break;
+            }
+        }
+        if slot == 0 {
+            anyhow::bail!("all 9 account slots are occupied (remove one from {})", env_file_path().display());
+        }
+    }
+    save_key(p, &reg.refresh_token, slot)?;
+    let var = if slot == 1 {
+        p.api_key_env.clone()
+    } else {
+        format!("{}_{}", p.api_key_env, slot)
+    };
+    println!(
+        "  \x1b[32m✓\x1b[0m saved {} to {} — the proxy rotates accounts on 429 and skips a rejected account.",
+        var,
+        env_file_path().display()
+    );
+    println!("  \x1b[2madd another account by running `proxy-fire login` again and picking cline.\x1b[0m");
+    Ok(())
 }
 
 /// Pool extra accounts: offers key slots 2..9 one at a time (all providers behave the same).

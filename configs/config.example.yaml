@@ -159,12 +159,28 @@ providers:
       enabled: true
       free_router_model: "openrouter/free"
 
+  - id: cline
+    name: "Cline (free tier)"
+    base_url: "https://api.cline.bot/api/v1"
+    api_key_env: "CLINE_REFRESH_TOKEN"   # refresh tokens; _2.._9 or CLINE_REFRESH_TOKENS=a,b for more accounts
+    enabled: true
+    priority: 2
+    timeout: "60s"
+    tier_type: "free"
+    # `proxy-fire login` → pick "cline" → WorkOS device auth. Free tier is a
+    # rotating promotion: models may change; `proxy-fire scan update` refreshes.
+    # Upstream is always streamed and reassembled to a normal completion.
+    discovery:
+      models_endpoint: "/ai/cline/recommended-models"
+    preferred_volume_model: "deepseek/deepseek-v4-flash"
+    rate_limit_notes: "Free-tier daily inference cap (INFERENCE_CAP_ERROR 429, body carries 'Try again in Xh Ym'). 429 benches that account slot until reset; rejected accounts are benched 10 min."
+
   - id: groq
     name: "Groq"
     base_url: "https://api.groq.com/openai/v1"
     api_key_env: "GROQ_API_KEY"
     enabled: true
-    priority: 2
+    priority: 3
     timeout: "15s"
     discovery:
       models_endpoint: "/models"

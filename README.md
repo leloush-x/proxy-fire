@@ -166,10 +166,13 @@ A pinned model that has left the free catalog falls back to the profile's strate
 
 ## Providers
 
-**250 free models across 8 providers**, from the scan of 9 Nov 2026 ([full list](FREE_MODELS.md)). One key is enough to start, and every extra key adds capacity.
+**253 free models across 9 providers**, from the scan of 9 Nov 2026 ([full list](FREE_MODELS.md)). One key is enough to start, and every extra key adds capacity.
+
+**Cline accounts as a provider.** `proxy-fire login` has a native **cline** option: it runs the official WorkOS device-authorization flow in your browser, registers the session with Cline, and stores your account's refresh token in `~/.proxy-fire/.env` as `CLINE_REFRESH_TOKEN` (extra accounts go in `CLINE_REFRESH_TOKEN_2…_9`). The free tier is a rotating promotion — models may change — so `proxy-fire scan update` refreshes the catalog from Cline's recommended-models endpoint; seed entries ship in the bundled catalog. Free-tier daily inference caps (HTTP 429 `INFERENCE_CAP_ERROR`, body says "Try again in …") bench that account until reset; rejected accounts are benched 10 minutes. Upstream responses are always streamed and reassembled server-side, so clients see one clean completion.
 
 | Provider | Free models | Get a key |
 |---|---:|---|
+| Cline | 3 | `proxy-fire login` → pick **cline** (WorkOS browser auth, no API key) |
 | NVIDIA NIM | 70 | [build.nvidia.com](https://build.nvidia.com) |
 | Mistral | 50 | [console.mistral.ai](https://console.mistral.ai) |
 | HuggingFace | 48 | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
@@ -185,6 +188,7 @@ Several keys per provider are pooled automatically — three ways to set them:
 - numbered vars: `GROQ_API_KEY`, `GROQ_API_KEY_2`, `GROQ_API_KEY_3`… (up to `_9`)
 - a comma-separated pool: `GROQ_API_KEYS=gsk_aaa,gsk_bbb,gsk_ccc`
 - on the per-provider `api_key` field (comma-separated values also work)
+- Cline accounts: `CLINE_REFRESH_TOKEN`, `CLINE_REFRESH_TOKEN_2`… (via `proxy-fire login`)
 
 The router spreads load across the pool round-robin, retries the same model with the next key on a 429, and puts only the rejected key on cooldown when a provider answers 401/403 — the rest of the pool keeps serving. Free tiers change often, so check each provider's own terms.
 

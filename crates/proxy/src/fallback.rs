@@ -670,7 +670,84 @@ impl FallbackChain {
         }
     }
 
+    /// Cline upstream: refresh-token slot → short-lived access token, always
+    /// stream upstream, reassemble SSE into a chat.completion body so the
+    /// rest of the chain sees a normal buffered response.
+    async fn call_cline(&self, cfg: &ProviderConfig, body: &Value) -> Result<Response, String> {
+        let refresh = cfg.resolved_api_key();
+        let refresh = refresh.trim();
+        if refresh.is_empty() {
+            return Err("cline: missing refresh token (run `proxy-fire login`)".to_string());
+        }
+        let access = proxy_fire_providers::cline::ensure_access_token(&self.http, refresh).await?;
+        let url = chat_endpoint_of(cfg);
+        let session = body
+            .get("session_id")
+            .and_then(|s| s.as_str())
+            .unwrap_or("sess_0")
+            .to_string();
+        let data = serde_json::to_vec(body).map_err(|e| format!("encoding request: {e}"))?;
+        let mut req = self
+            .http
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .header("Authorization", access) // already carries the workos: prefix
+            .header("X-Task-ID", &session)
+            .body(data);
+        if let Some(d) = proxy_fire_core::config::parse_duration(&cfg.timeout) {
+            req = req.timeout(d);
+        }
+        let resp = req.send().await.map_err(|e| format!("cline: {e}"))?;
+        let status = resp.status().as_u16();
+        let headers = resp.headers().clone();
+        let raw = resp
+            .bytes()
+            .await
+            .map_err(|e| format!("reading response: {e}"))?
+            .to_vec();
+        if status != 200 {
+            let used = used_model(&raw).unwrap_or_default();
+            return Ok(Response {
+                status,
+                headers,
+                body: raw,
+                used_model: used,
+                truncated: false,
+            });
+        }
+        // Aggregate the SSE stream into a chat.completion body.
+        match proxy_fire_providers::cline::aggregate_stream(&raw) {
+            Ok(json_bytes) => {
+                let used = used_model(&json_bytes).unwrap_or_default();
+                Ok(Response {
+                    status,
+                    headers,
+                    body: json_bytes,
+                    used_model: used,
+                    truncated: false,
+                })
+            }
+            Err(e) => {
+                // Upstream answered 200 with a non-SSE body (already JSON) — pass it through.
+                if serde_json::from_slice::<Value>(&raw).is_ok() {
+                    let used = used_model(&raw).unwrap_or_default();
+                    return Ok(Response {
+                        status,
+                        headers,
+                        body: raw,
+                        used_model: used,
+                        truncated: false,
+                    });
+                }
+                Err(format!("cline: aggregating upstream stream failed: {e}"))
+            }
+        }
+    }
+
     async fn call_provider(&self, cfg: &ProviderConfig, body: &Value) -> Result<Response, String> {
+        if cfg.id == "cline" {
+            return self.call_cline(cfg, body).await;
+        }
         let url = chat_endpoint_of(cfg);
         let data = serde_json::to_vec(body).map_err(|e| format!("encoding request: {e}"))?;
 
@@ -745,6 +822,21 @@ impl FallbackChain {
                         Value::String(pc.native_features.service_tier.clone()),
                     );
                 }
+            }
+            // Cline: session correlation + reasoning effort defaults + always
+            // stream upstream (aggregated back to JSON in call_cline).
+            if provider_id == "cline" {
+                let session = obj
+                    .get("session_id")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .unwrap_or_else(proxy_fire_providers::cline::new_session_id);
+                obj.insert("session_id".to_string(), Value::String(session));
+                if obj.get("reasoning_effort").is_none() {
+                    obj.insert("reasoning_effort".to_string(), Value::String("high".to_string()));
+                }
+                obj.insert("stream".to_string(), Value::Bool(true));
             }
         }
         body
