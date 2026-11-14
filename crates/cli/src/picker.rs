@@ -60,6 +60,11 @@ pub fn pick(providers: &[&ProviderConfig], catalog: &Catalog) -> Result<Option<u
     if !std::io::stdin().is_terminal() {
         return fallback_pick(providers, catalog);
     }
+    // Raw termios mode is unix-only; Windows gets the numeric prompt instead.
+    #[cfg(not(unix))]
+    {
+        return fallback_pick(providers, catalog);
+    }
 
     let free_counts: Vec<usize> = providers
         .iter()
