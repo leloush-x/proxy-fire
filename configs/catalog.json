@@ -2459,6 +2459,84 @@
         "source": "cline",
         "requires_stream": true
       }
+    },
+    {
+      "provider_id": "antigravity",
+      "model_id": "gemini-4-hydrogen",
+      "is_free": true,
+      "tier_type": "free",
+      "context_window": 1048576,
+      "discovered_at": "2026-11-15T07:49:35.405Z",
+      "last_verified_at": "2026-11-15T07:49:35.405Z",
+      "metadata": {
+        "source": "antigravity",
+        "efforts": true
+      }
+    },
+    {
+      "provider_id": "antigravity",
+      "model_id": "gemini-4-argon",
+      "is_free": false,
+      "tier_type": "credit",
+      "context_window": 1048576,
+      "discovered_at": "2026-11-15T07:49:35.405Z",
+      "last_verified_at": "2026-11-15T07:49:35.405Z",
+      "metadata": {
+        "source": "antigravity",
+        "efforts": true
+      }
+    },
+    {
+      "provider_id": "antigravity",
+      "model_id": "gemini-4-carbon",
+      "is_free": false,
+      "tier_type": "credit",
+      "context_window": 1048576,
+      "discovered_at": "2026-11-15T07:49:35.405Z",
+      "last_verified_at": "2026-11-15T07:49:35.405Z",
+      "metadata": {
+        "source": "antigravity",
+        "efforts": true
+      }
+    },
+    {
+      "provider_id": "antigravity",
+      "model_id": "gemini-3.8-flash",
+      "is_free": true,
+      "tier_type": "free",
+      "context_window": 1048576,
+      "discovered_at": "2026-11-15T07:49:35.405Z",
+      "last_verified_at": "2026-11-15T07:49:35.405Z",
+      "metadata": {
+        "source": "antigravity",
+        "efforts": true
+      }
+    },
+    {
+      "provider_id": "antigravity",
+      "model_id": "claude-sonnet-5-5",
+      "is_free": false,
+      "tier_type": "credit",
+      "context_window": 200000,
+      "discovered_at": "2026-11-15T07:49:35.405Z",
+      "last_verified_at": "2026-11-15T07:49:35.405Z",
+      "metadata": {
+        "source": "antigravity",
+        "efforts": true
+      }
+    },
+    {
+      "provider_id": "antigravity",
+      "model_id": "claude-opus-5-5",
+      "is_free": false,
+      "tier_type": "credit",
+      "context_window": 200000,
+      "discovered_at": "2026-11-15T07:49:35.405Z",
+      "last_verified_at": "2026-11-15T07:49:35.405Z",
+      "metadata": {
+        "source": "antigravity",
+        "efforts": true
+      }
     }
   ],
   "blocklist": [

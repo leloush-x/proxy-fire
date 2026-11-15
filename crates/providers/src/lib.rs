@@ -8,6 +8,7 @@ use serde_json::Value;
 use std::sync::OnceLock;
 use std::time::Duration;
 
+pub mod antigravity;
 mod cerebras;
 pub mod cline;
 mod gemini;
@@ -77,6 +78,7 @@ pub fn all() -> &'static [Box<dyn Provider>] {
     static ALL: OnceLock<Vec<Box<dyn Provider>>> = OnceLock::new();
     ALL.get_or_init(|| {
         vec![
+            Box::new(antigravity::Antigravity),
             Box::new(cline::Cline),
             Box::new(groq::Groq),
             Box::new(gemini::Gemini),

@@ -30,6 +30,9 @@ async fn login_provider(p: &ProviderConfig) -> Result<()> {
     if p.id.eq_ignore_ascii_case("cline") {
         return cline_login(p).await;
     }
+    if p.id.eq_ignore_ascii_case("antigravity") {
+        return antigravity_login(p).await;
+    }
     if p.api_key_env.is_empty() {
         println!(
             "  \x1b[32m✓\x1b[0m {} needs no API key (local / keyless). Nothing to save.",
@@ -97,6 +100,120 @@ async fn login_provider(p: &ProviderConfig) -> Result<()> {
     );
 
     add_extra_key(p).await
+}
+
+/// Antigravity account login — Google OAuth (PKCE) via a local callback
+/// listener on 127.0.0.1:51121, then register the account and list its models.
+async fn antigravity_login(p: &ProviderConfig) -> Result<()> {
+    println!("  \x1b[36mGoogle Antigravity login\x1b[0m  (Google OAuth, PKCE)\n");
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .context("http client")?;
+
+    let (verifier, challenge) = proxy_fire_providers::antigravity::pkce();
+    let state = format!(
+        "agc_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0)
+    );
+    let url = proxy_fire_providers::antigravity::authorize_url(&state, &challenge);
+    println!("  1. Open this URL in your browser:\n     {url}");
+    println!("  2. Approve access with your Google account\n");
+
+    let callback = std::thread::spawn(move || -> Result<String> {
+        let listener = std::net::TcpListener::bind("127.0.0.1:51121").context(
+            "binding callback listener on 127.0.0.1:51121 (is another antigravity-proxy running?)",
+        )?;
+        use std::io::{BufRead, BufReader, Write};
+        let (stream, _) = listener.accept()?;
+        drop(listener);
+        let mut reader = BufReader::new(stream);
+        let mut line = String::new();
+        reader.read_line(&mut line)?;
+        let request_line = line.trim().to_string();
+        let html = String::from(
+            "<html><body><h2>Login complete.</h2><p>You may close this tab.</p></body></html>",
+        );
+        if let Some(target) = request_line.split_whitespace().nth(1) {
+            let query = target.split('?').nth(1).unwrap_or("");
+            for pair in query.split('&') {
+                let mut kv = pair.splitn(2, '=');
+                let k = kv.next().unwrap_or("");
+                let v = kv.next().unwrap_or("");
+                if k == "code" {
+                    let code = percent_encoding::percent_decode_str(v)
+                        .decode_utf8_lossy()
+                        .to_string();
+                    let resp = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}", html.len(), html);
+                    let _ = reader.get_mut().write_all(resp.as_bytes());
+                    return Ok(code);
+                }
+            }
+        }
+        let _ = reader
+            .get_mut()
+            .write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n");
+        anyhow::bail!("no 'code' parameter in OAuth callback ({request_line})")
+    });
+
+    println!("  \x1b[2mwaiting for the browser to redirect to http://localhost:51121 …\x1b[0m");
+    let code = callback
+        .join()
+        .map_err(|_| anyhow::anyhow!("callback thread panicked"))??;
+
+    let (access, refresh) =
+        proxy_fire_providers::antigravity::exchange_code(&client, &code, &verifier)
+            .await
+            .map_err(anyhow::Error::msg)
+            .context("exchanging authorization code for tokens")?;
+    println!("\n  \x1b[32m✓ signed in and received account tokens\x1b[0m");
+
+    // Show what this account can use.
+    let project = proxy_fire_providers::antigravity::project_id(&client, &access)
+        .await
+        .ok();
+    let models =
+        proxy_fire_providers::antigravity::list_models(&client, &access, project.as_deref()).await;
+    if !models.is_empty() {
+        println!("  \x1b[2mmodels on your account ({}):\x1b[0m", models.len());
+        for m in models.iter().take(8) {
+            println!("    · {m}");
+        }
+    }
+
+    // First free slot: base var if unset, else the first free _N.
+    let mut slot = 1usize;
+    if !p.missing_key() {
+        slot = 0;
+        for i in 2..=9usize {
+            if proxy_fire_core::dotenv::lookup_env(&format!("{}_{}", p.api_key_env, i)).is_none() {
+                slot = i;
+                break;
+            }
+        }
+        if slot == 0 {
+            anyhow::bail!(
+                "all 9 account slots are occupied (remove one from {})",
+                env_file_path().display()
+            );
+        }
+    }
+    save_key(p, &refresh, slot)?;
+    let var = if slot == 1 {
+        p.api_key_env.clone()
+    } else {
+        format!("{}_{}", p.api_key_env, slot)
+    };
+    println!(
+        "  \x1b[32m✓\x1b[0m saved {} to {} — the proxy rotates accounts on 429 and skips a rejected account.",
+        var,
+        env_file_path().display()
+    );
+    println!("  \x1b[2madd another Google account by running proxy-fire login again and picking antigravity.\x1b[0m");
+    Ok(())
 }
 
 /// Cline account login — WorkOS device authorization, writes the refresh

@@ -32,7 +32,7 @@
 >   -d '{"model":"auto","messages":[{"role":"user","content":"In one sentence: why do free LLM tiers run dry?"}]}'
 > ```
 >
-> The `X-Used-Model` header tells you which free model answered. The archive brings its own provider list and a catalog of 253 free models. Linux: the `.tar.gz` on the [releases page](https://github.com/leloush-x/proxy-fire/releases/latest), or Docker (see [Install](#install)).
+> The `X-Used-Model` header tells you which free model answered. The archive brings its own provider list and a catalog of 255 free models. Linux: the `.tar.gz` on the [releases page](https://github.com/leloush-x/proxy-fire/releases/latest), or Docker (see [Install](#install)).
 
 <p align="center">
   <img src="docs/img/fallback.svg" width="860" alt="A real request on 31 October 2026. A tool sends model auto to the proxy on localhost. The proxy first tries Groq kimi-k2, which returns 404 model not found, and puts that model on a one-hour cooldown. It then tries Groq gpt-oss-20b, which answers. The other providers were not needed. The client saw one clean 200 after 0.45 seconds.">
@@ -166,12 +166,15 @@ A pinned model that has left the free catalog falls back to the profile's strate
 
 ## Providers
 
-**253 free models across 9 providers**, from the scan of 9 Nov 2026 ([full list](FREE_MODELS.md)). One key is enough to start, and every extra key adds capacity.
+**255 free models across 10 providers**, from the scan of 9 Nov 2026 ([full list](FREE_MODELS.md)). One key is enough to start, and every extra key adds capacity.
 
 **Cline accounts as a provider.** `proxy-fire login` has a native **cline** option: it runs the official WorkOS device-authorization flow in your browser, registers the session with Cline, and stores your account's refresh token in `~/.proxy-fire/.env` as `CLINE_REFRESH_TOKEN` (extra accounts go in `CLINE_REFRESH_TOKEN_2…_9`). The free tier is a rotating promotion — models may change — so `proxy-fire scan update` refreshes the catalog from Cline's recommended-models endpoint; seed entries ship in the bundled catalog. Free-tier daily inference caps (HTTP 429 `INFERENCE_CAP_ERROR`, body says "Try again in …") bench that account until reset; rejected accounts are benched 10 minutes. Upstream responses are always streamed and reassembled server-side, so clients see one clean completion.
 
+**Antigravity (Google AI) as a provider.** `proxy-fire login` → pick **antigravity** → Google OAuth (PKCE, local callback on port 51121) → your **Google refresh token** is saved in `~/.proxy-fire/.env` as `ANTIGRAVITY_REFRESH_TOKEN` (extra accounts via `ANTIGRAVITY_REFRESH_TOKEN_2…_9`). Antigravity speaks Google's Cloud Code protocol, not OpenAI's — Proxy-Fire translates on the fly (OpenAI → `v1internal:generateContent?alt=sse`, SSE → chat.completion). Seeded catalog: `gemini-3.8-flash` + `gemini-4-hydrogen` (free on all plans), `gemini-4-argon`, `gemini-4-carbon`, `claude-sonnet-5-5`, `claude-opus-5-5` (Pro/Ultra). Tier variants are **grouped**: pick e.g. `gemini-3.8-flash` as the model and set `reasoning_effort: low|medium|high` — Proxy-Fire maps it to the right wire id (`gemini-3.8-flash-low/medium/high`); explicit wire ids also accepted. Weekly quota (Google AI Pro refreshes every 5h); `RESOURCE_EXHAUSTED` 429s bench that account slot.
+
 | Provider | Free models | Get a key |
 |---|---:|---|
+| Antigravity | 6 | `proxy-fire login` → pick **antigravity** (Google OAuth, no API key) |
 | Cline | 3 | `proxy-fire login` → pick **cline** (WorkOS browser auth, no API key) |
 | NVIDIA NIM | 70 | [build.nvidia.com](https://build.nvidia.com) |
 | Mistral | 50 | [console.mistral.ai](https://console.mistral.ai) |

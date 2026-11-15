@@ -159,6 +159,17 @@ providers:
       enabled: true
       free_router_model: "openrouter/free"
 
+  - id: antigravity
+    name: "Antigravity (Google AI / free tier)"
+    base_url: "https://daily-cloudcode-pa.googleapis.com"   # fallback: https://cloudcode-pa.googleapis.com
+    api_key_env: "ANTIGRAVITY_REFRESH_TOKEN"   # Google refresh tokens; _2.._9 or comma-separated
+    enabled: true
+    priority: 4
+    timeout: "120s"
+    tier_type: "free"
+    preferred_volume_model: "gemini-3.8-flash"
+    rate_limit_notes: "Google AI weekly quota; gemini-3.8-flash is free on all plans, Gemini 4 / Claude 5.5 gated to Pro/Ultra. 429 RESOURCE_EXHAUSTED benches that account slot."
+
   - id: cline
     name: "Cline (free tier)"
     base_url: "https://api.cline.bot/api/v1"

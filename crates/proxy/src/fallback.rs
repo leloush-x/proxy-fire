@@ -754,9 +754,111 @@ impl FallbackChain {
         }
     }
 
+    /// Antigravity upstream: pool slot = Google refresh token, resolved to
+    /// a short-lived access token, request built in Gemini format (the API is
+    /// not OpenAI-compatible), response re-aggregated to a chat.completion body.
+    async fn call_antigravity(
+        &self,
+        cfg: &ProviderConfig,
+        body: &Value,
+    ) -> Result<Response, String> {
+        let refresh = cfg.resolved_api_key();
+        let refresh = refresh.trim();
+        if refresh.is_empty() {
+            return Err(
+                "antigravity: missing refresh token (run 'proxy-fire login' and pick antigravity)"
+                    .to_string(),
+            );
+        }
+        let access =
+            proxy_fire_providers::antigravity::ensure_access_token(&self.http, refresh).await?;
+        let url = format!(
+            "{}/v1internal:generateContent?alt=sse",
+            proxy_fire_providers::antigravity::ANTIGRAVITY_API_BASE
+        );
+        let project = proxy_fire_providers::antigravity::project_id(&self.http, &access)
+            .await
+            .ok();
+        let session = proxy_fire_providers::antigravity::new_session_id();
+        // Translate OpenAI → Gemini format + resolve canonical id to wire id.
+        let requested = body.get("model").and_then(|m| m.as_str()).unwrap_or("");
+        let translated =
+            proxy_fire_providers::antigravity::build_request(body, requested, project.as_deref());
+        let mut headers = proxy_fire_providers::antigravity::antigravity_client_headers();
+        for (k, v) in &cfg.extra_headers {
+            if let Some(h) = headers.iter_mut().find(|h| h.0.eq_ignore_ascii_case(k)) {
+                h.1 = v.clone();
+            } else {
+                headers.push((k.clone(), v.clone()));
+            }
+        }
+        let data = serde_json::to_vec(&translated).map_err(|e| format!("encoding request: {e}"))?;
+        let mut req = self
+            .http
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {access}"))
+            .header("X-Machine-Session-Id", &session);
+        for (k, v) in &headers {
+            req = req.header(k.as_str(), v.as_str());
+        }
+        req = req.body(data);
+        if let Some(d) = proxy_fire_core::config::parse_duration(&cfg.timeout) {
+            req = req.timeout(d);
+        }
+        let resp = req.send().await.map_err(|e| format!("antigravity: {e}"))?;
+        let status = resp.status().as_u16();
+        let headers = resp.headers().clone();
+        let raw = resp
+            .bytes()
+            .await
+            .map_err(|e| format!("reading response: {e}"))?
+            .to_vec();
+        if status != 200 {
+            let used = used_model(&raw).unwrap_or_default();
+            return Ok(Response {
+                status,
+                headers,
+                body: raw,
+                used_model: used,
+                truncated: false,
+            });
+        }
+        match proxy_fire_providers::antigravity::aggregate_stream(&raw) {
+            Ok(json_bytes) => {
+                let used = used_model(&json_bytes).unwrap_or_default();
+                Ok(Response {
+                    status,
+                    headers,
+                    body: json_bytes,
+                    used_model: used,
+                    truncated: false,
+                })
+            }
+            Err(e) => {
+                if serde_json::from_slice::<Value>(&raw).is_ok() {
+                    let used = used_model(&raw).unwrap_or_default();
+                    return Ok(Response {
+                        status,
+                        headers,
+                        body: raw,
+                        used_model: used,
+                        truncated: false,
+                    });
+                }
+                Err(format!(
+                    "antigravity: aggregating upstream stream failed: {e}"
+                ))
+            }
+        }
+    }
+
     async fn call_provider(&self, cfg: &ProviderConfig, body: &Value) -> Result<Response, String> {
         if cfg.id == "cline" {
             return self.call_cline(cfg, body).await;
+        }
+        if cfg.id == "antigravity" {
+            return self.call_antigravity(cfg, body).await;
         }
         let url = chat_endpoint_of(cfg);
         let data = serde_json::to_vec(body).map_err(|e| format!("encoding request: {e}"))?;
