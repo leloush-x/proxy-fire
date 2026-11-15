@@ -172,89 +172,58 @@ const REFRESH_SKEW_MS: i64 = 60_000;
 
 /// Client version baked into the IDE (product.json "version").
 /// Codename gates accept ≥ 1.110.0.
-const ANTIGRAVITY_CLIENT_VERSION: &str = "1.110.0";
-/// IDE "ideVersion" — the User-Agent must use the `antigravity/hub/<ver> os/arch`
-/// format or the backend hides newer models from the client.
-const ANTIGRAVITY_IDE_VERSION: &str = "2.25.0";
-const X_GOOG_API_CLIENT: &str = "gl-node/18.18.2 fire/0.8.6 grpc/1.10.x";
+/// IDE version (product.json "version" / "ideVersion"). The reference repo
+/// (preca-hoshino/antigravity-proxy) ships 2.31.1; all older versions work too.
+pub const ANTIGRAVITY_VERSION: &str = "2.31.1";
+pub const X_GOOG_API_CLIENT: &str = "google-cloud-sdk vscode_cloudshelleditor/0.1";
+/// The IDE ships with a fixed plain-PKCE verifier; the Cloud Code public
+/// client is bound to it on Google's side, so we must use it verbatim.
+pub const CODE_VERIFIER: &str = "cFH3lPzU2FhJjQhHlGqKqQhHlGqKqQhHlGqKqQhHlGq";
 
-pub fn ide_user_agent() -> String {
-    let (os, arch) = platform_triple();
-    format!("antigravity/hub/{ANTIGRAVITY_IDE_VERSION} {os}/{arch}")
+/// Stable per-account identity helpers. The backend uses
+/// `x-goog-quotauser`/`x-client-device-id` to attribute quota; a stable
+/// fingerprint derived from the account identifier is required — a random
+/// one gets treated as a fresh abusive client each launch.
+fn to_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
-fn platform_triple() -> (&'static str, &'static str) {
-    let (os, arch) = if cfg!(target_os = "macos") {
-        (
-            "darwin",
-            if cfg!(target_arch = "aarch64") {
-                "arm64"
-            } else {
-                "x64"
-            },
-        )
-    } else if cfg!(target_os = "windows") {
-        (
-            "win32",
-            if cfg!(target_arch = "x86_64") {
-                "x64"
-            } else {
-                "arm64"
-            },
-        )
-    } else {
-        (
-            "linux",
-            if cfg!(target_arch = "aarch64") {
-                "arm64"
-            } else {
-                "x64"
-            },
-        )
-    };
-    (os, arch)
+/// Derive the stable quota-user + device-id for one account seed (email or
+/// refresh token). Matches the reference repo: "device-" + sha256(seed)[..16].
+pub fn account_fingerprint(seed: &str) -> (String, String) {
+    use sha2::{Digest, Sha256};
+    let hash = Sha256::digest(seed.as_bytes());
+    let hex = to_hex(&hash);
+    (format!("device-{}", &hex[..16]), hex[..16].to_string())
 }
 
-/// IDE_TYPE.ANTIGRAVITY = 9, PLUGIN_TYPE.GEMINI = 2 (numeric enums expected by the API).
-fn client_metadata() -> Value {
-    let platform = if cfg!(target_os = "macos") {
-        if cfg!(target_arch = "aarch64") {
-            2
-        } else {
-            1
-        } // DARWIN_ARM64=2 / DARWIN_AMD64=1
-    } else if cfg!(target_os = "windows") {
-        5 // WINDOWS_AMD64
-    } else {
-        if cfg!(target_arch = "aarch64") {
-            4
-        } else {
-            3
-        } // LINUX_ARM64 / LINUX_AMD64
-    };
-    json!({
-        "ideType": 9,
-        "platform": platform,
-        "pluginType": 2,
-    })
-}
+/// The raw JSON sent in the `client-metadata` header (key order matters;
+/// Windows/amd64 impersonation is required for the free tier).
+pub const CLIENT_METADATA_JSON: &str = "{\"ideType\":\"ANTIGRAVITY\",\"platform\":\"WINDOWS\",\"pluginType\":\"GEMINI\",\"osVersion\":\"10.0.22631\",\"arch\":\"amd64\"}";
 
-/// Headers the IDE itself sends (required: X-Client-Name/Version, UA).
-pub fn antigravity_client_headers() -> Vec<(String, String)> {
+/// Headers sent by the IDE (identical to the reference wire protocol).
+/// `seed` identifies the account for the stable quota-user derivation.
+pub fn antigravity_client_headers(seed: &str) -> Vec<(String, String)> {
+    let (quota_user, device_id) = account_fingerprint(seed);
     vec![
-        ("User-Agent".to_string(), ide_user_agent()),
-        ("X-Client-Name".to_string(), "antigravity".to_string()),
         (
-            "X-Client-Version".to_string(),
-            ANTIGRAVITY_CLIENT_VERSION.to_string(),
+            "User-Agent".to_string(),
+            format!(
+                "antigravity/hub/{ANTIGRAVITY_VERSION} (aidev_client; os_type=windows; arch=amd64; cl=1019769835)"
+            ),
         ),
         (
-            "x-goog-api-client".to_string(),
+            "X-GOOG-API-CLIENT".to_string(),
             X_GOOG_API_CLIENT.to_string(),
         ),
+        ("ACCEPT".to_string(), "text/event-stream".to_string()),
+        ("X-GOOG-QuotaUser".to_string(), quota_user),
+        ("X-Client-Device-Id".to_string(), device_id),
+        ("Client-Metadata".to_string(), CLIENT_METADATA_JSON.to_string()),
     ]
 }
 
+// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // Access-token cache (refresh tokens are stable, access tokens short-lived)
 // ---------------------------------------------------------------------------
@@ -279,7 +248,7 @@ const OAUTH_CLIENT_ID: &str =
 const OAUTH_CLIENT_SECRET: &str = "GOCSPX-K58FWR486LJ1mLB8sXC4z6qDAf";
 const OAUTH_AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const OAUTH_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
-const OAUTH_CLIENT_SCOPES: &str = "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/experimentsandconfigs";
+const OAUTH_CLIENT_SCOPES: &str = "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/experimentsandconfigs";
 
 #[derive(Deserialize)]
 struct TokenResp {
@@ -404,31 +373,62 @@ pub async fn exchange_code(
     Ok((c.access_token, refresh))
 }
 
+/// Metadata variants for the LoadAssist call — the backend accepts/rejects
+/// ideType values inconsistently depending on account/tier, so try the primary
+/// and fall back through all five known types.
+fn load_assist_body(ide_type: &str) -> Value {
+    let platform = if ide_type == "ANTIGRAVITY" { "WINDOWS" } else { "PLATFORM_UNSPECIFIED" };
+    json!({
+        "metadata": {
+            "ideType": ide_type,
+            "platform": platform,
+            "pluginType": "GEMINI",
+        },
+        "mode": 1,
+    })
+}
+
 /// Call loadCodeAssist to discover project + tier (property names mirror the IDE).
-pub async fn load_code_assist(client: &Client, access_token: &str) -> Result<Value, String> {
-    let url = format!("{ANTIGRAVITY_PROD_BASE}/v1internal:loadCodeAssist");
-    let resp = client
-        .post(&url)
-        .headers(authz_with_meta(access_token, None))
-        .json(&json!({
-            "metadata": client_metadata(),
-            "mode": 1,
-        }))
-        .timeout(Duration::from_secs(20))
-        .send()
-        .await
-        .map_err(|e| format!("loadCodeAssist request failed: {e}"))?;
-    let status = resp.status().as_u16();
-    if status != 200 {
-        let body = resp.text().await.unwrap_or_default();
-        return Err(format!(
-            "loadCodeAssist rejected ({status}): {}",
-            tail(&body)
-        ));
+/// Tries ANTIGRAVITY first, then VSCODE, JETBRAINS, CLOUD_SHELL, IDE_UNSPECIFIED
+/// across both endpoints.
+pub async fn load_code_assist(
+    client: &Client,
+    access_token: &str,
+    seed: &str,
+) -> Result<Value, String> {
+    let endpoints = [
+        ANTIGRAVITY_PROD_BASE, // prod first (matches IDE behavior)
+        ANTIGRAVITY_DAILY_BASE,
+    ];
+    let ide_types = ["ANTIGRAVITY", "VSCODE", "JETBRAINS", "CLOUD_SHELL", "IDE_UNSPECIFIED"];
+
+    let mut last_err = String::from("unknown");
+    for endpoint in endpoints {
+        for ide_type in ide_types {
+            let url = format!("{endpoint}/v1internal:loadCodeAssist");
+            match client
+                .post(&url)
+                .headers(authz_with_meta(access_token, None, seed))
+                .json(&load_assist_body(ide_type))
+                .timeout(Duration::from_secs(20))
+                .send()
+                .await
+            {
+                Ok(resp) => {
+                    let status = resp.status().as_u16();
+                    if status == 200 {
+                        return resp.json().await.map_err(|e| format!("loadCodeAssist decode: {e}"));
+                    }
+                    let body = resp.text().await.unwrap_or_default();
+                    last_err = format!("loadCodeAssist ({endpoint}, {ide_type}) -> {status}: {}", tail(&body));
+                }
+                Err(e) => {
+                    last_err = format!("loadCodeAssist ({endpoint}, {ide_type}) failed: {e}");
+                }
+            }
+        }
     }
-    resp.json()
-        .await
-        .map_err(|e| format!("loadCodeAssist decode: {e}"))
+    Err(last_err)
 }
 
 /// Onboard a freshly-consented account to a free-tier project.
@@ -436,15 +436,20 @@ pub async fn onboard_user(
     client: &Client,
     access_token: &str,
     tier_id: &str,
+    seed: &str,
 ) -> Result<String, String> {
     for endpoint in [ANTIGRAVITY_DAILY_BASE, ANTIGRAVITY_PROD_BASE] {
         let url = format!("{endpoint}/v1internal:onboardUser");
         if let Ok(resp) = client
             .post(&url)
-            .headers(authz_with_meta(access_token, None))
+            .headers(authz_with_meta(access_token, None, seed))
             .json(&json!({
                 "tierId": tier_id,
-                "metadata": client_metadata(),
+                "metadata": {
+                    "ideType": "ANTIGRAVITY",
+                    "platform": "WINDOWS",
+                    "pluginType": "GEMINI",
+                },
             }))
             .timeout(Duration::from_secs(15))
             .send()
@@ -477,12 +482,12 @@ pub async fn onboard_user(
     Err("onboardUser did not complete (try again or create the project manually at https://console.cloud.google.com)".into())
 }
 
-fn authz_with_meta(token: &str, session_id: Option<&str>) -> reqwest::header::HeaderMap {
+fn authz_with_meta(token: &str, session_id: Option<&str>, seed: &str) -> reqwest::header::HeaderMap {
     let mut m = reqwest::header::HeaderMap::new();
     if let Ok(v) = format!("Bearer {token}").parse() {
         m.insert("Authorization", v);
     }
-    for (k, v) in antigravity_client_headers() {
+    for (k, v) in antigravity_client_headers(seed) {
         if let Ok(name) = reqwest::header::HeaderName::from_bytes(k.as_bytes()) {
             if let Ok(value) = reqwest::header::HeaderValue::from_str(&v) {
                 m.insert(name, value);
@@ -505,6 +510,7 @@ fn tail(s: &str) -> String {
 pub async fn list_models(
     client: &Client,
     access_token: &str,
+    seed: &str,
     project_id: Option<&str>,
 ) -> Vec<String> {
     for endpoint in [ANTIGRAVITY_PROD_BASE, ANTIGRAVITY_DAILY_BASE] {
@@ -516,7 +522,7 @@ pub async fn list_models(
         };
         if let Ok(resp) = client
             .post(&url)
-            .headers(authz_with_meta(access_token, None))
+            .headers(authz_with_meta(access_token, None, seed))
             .json(&body)
             .timeout(Duration::from_secs(15))
             .send()
@@ -920,21 +926,67 @@ fn uuid_like() -> String {
 }
 
 /// Well-known fallback project for accounts without an assigned project.
+/// Well-known fallback project for accounts without an assigned project.
 pub const DEFAULT_PROJECT_ID: &str = "rising-fact-p41fc";
+
+/// On-disk cache of discovered Cloud Code project ids, keyed by the account
+/// seed. Lives under ~/.proxy-fire/antigravity-projects.json (0600).
+fn project_cache_path() -> std::path::PathBuf {
+    proxy_fire_core::paths::data_dir().join("antigravity-projects.json")
+}
+
+fn read_project_cache(seed: &str) -> Option<String> {
+    let path = project_cache_path();
+    let data = std::fs::read(&path).ok()?;
+    let map: std::collections::HashMap<String, String> = serde_json::from_slice(&data).ok()?;
+    map.get(&hex_key(seed)).cloned()
+}
+
+fn write_project_cache(seed: &str, project: &str) -> std::io::Result<()> {
+    let path = project_cache_path();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let mut map: std::collections::HashMap<String, String> = std::fs::read(&path)
+        .ok()
+        .and_then(|d| serde_json::from_slice(&d).ok())
+        .unwrap_or_default();
+    map.insert(hex_key(seed), project.to_string());
+    std::fs::write(&path, serde_json::to_string_pretty(&map)?)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
+}
+
+fn hex_key(seed: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let hash = Sha256::digest(seed.as_bytes());
+    hash.iter().map(|b| format!("{b:02x}")).collect::<String>()
+}
 
 /// Discover (and cache) the Cloud Code project for one account.
 /// 1) loadCodeAssist → cloudaicompanionProject (string or {id})
 /// 2) if absent: onboardUser against the default tier → managed project id
 /// 3) worst case: the public fallback project id
-pub async fn project_id(client: &Client, access: &str) -> Result<String, String> {
+pub async fn project_id(client: &Client, access: &str, seed: &str) -> Result<String, String> {
     static CACHE: OnceLock<RwLock<std::collections::HashMap<String, String>>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| RwLock::new(std::collections::HashMap::new()));
     if let Ok(map) = cache.read() {
-        if let Some(p) = map.get(access) {
+        if let Some(p) = map.get(seed) {
             return Ok(p.clone());
         }
     }
-    let discovered = match load_code_assist(client, access).await {
+    // Serve the persisted project id straight from disk cache (avoids re-onboarding).
+    if let Some(p) = read_project_cache(seed) {
+        if let Ok(mut map) = cache.write() {
+            map.insert(seed.to_string(), p.clone());
+        }
+        return Ok(p);
+    }
+    let discovered = match load_code_assist(client, access, seed).await {
         Ok(v) => extract_project(&v),
         Err(_) => None,
     };
@@ -942,7 +994,7 @@ pub async fn project_id(client: &Client, access: &str) -> Result<String, String>
         p
     } else {
         // Fresh account: onboard to the default (free) tier.
-        let tier = match load_code_assist(client, access).await {
+        let tier = match load_code_assist(client, access, seed).await {
             Ok(v) => v
                 .get("allowedTiers")
                 .and_then(|t| t.as_array())
@@ -955,14 +1007,15 @@ pub async fn project_id(client: &Client, access: &str) -> Result<String, String>
                 .unwrap_or_else(|| "free-tier".to_string()),
             Err(_) => "free-tier".to_string(),
         };
-        match onboard_user(client, access, &tier).await {
+        match onboard_user(client, access, &tier, seed).await {
             Ok(p) => p,
             Err(_) => DEFAULT_PROJECT_ID.to_string(),
         }
     };
     if let Ok(mut map) = cache.write() {
-        map.insert(access.to_string(), pid.clone());
+        map.insert(seed.to_string(), pid.clone());
     }
+    let _ = write_project_cache(seed, &pid);
     Ok(pid)
 }
 
@@ -1015,10 +1068,11 @@ impl crate::Provider for Antigravity {
 
             // Best-effort live sync from fetchAvailableModels.
             if let Some(refresh) = cfg.all_keys().into_iter().next() {
+                let seed = refresh.clone();
                 match ensure_access_token(client, &refresh).await {
                     Ok(access) => {
-                        let project = project_id(client, &access).await.ok();
-                        let ids = list_models(client, &access, project.as_deref()).await;
+                        let project = project_id(client, &access, &seed).await.ok();
+                        let ids = list_models(client, &access, &seed, project.as_deref()).await;
                         let seeds: std::collections::HashSet<String> =
                             SEED_MODELS.iter().map(|m| m.id.to_string()).collect();
                         let mut live: Vec<crate::RawModel> = ids
@@ -1068,17 +1122,10 @@ fn seed_meta_for(id: &str) -> (i64, bool, &'static str) {
         .unwrap_or((131_072, true, "free"))
 }
 
-/// Generate a PKCE (S256) verifier + challenge for the interactive login flow.
+/// The IDE's OAuth client is bound to a fixed plain-PKCE verifier; we reuse
+/// it verbatim. Returns (verifier, challenge) — for "plain" they are equal.
 pub fn pkce() -> (String, String) {
-    use base64::Engine;
-    use rand::Rng;
-    use sha2::{Digest, Sha256};
-    let mut rng = rand::rng();
-    let bytes: [u8; 32] = rng.random();
-    let verifier = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
-    let digest = Sha256::digest(verifier.as_bytes());
-    let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(digest);
-    (verifier, challenge)
+    (CODE_VERIFIER.to_string(), CODE_VERIFIER.to_string())
 }
 
 // ---------------------------------------------------------------------------

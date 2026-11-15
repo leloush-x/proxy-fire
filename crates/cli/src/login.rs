@@ -172,11 +172,12 @@ async fn antigravity_login(p: &ProviderConfig) -> Result<()> {
     println!("\n  \x1b[32m✓ signed in and received account tokens\x1b[0m");
 
     // Show what this account can use.
-    let project = proxy_fire_providers::antigravity::project_id(&client, &access)
+    let seed = refresh.clone();
+    let project = proxy_fire_providers::antigravity::project_id(&client, &access, &seed)
         .await
         .ok();
     let models =
-        proxy_fire_providers::antigravity::list_models(&client, &access, project.as_deref()).await;
+        proxy_fire_providers::antigravity::list_models(&client, &access, &seed, project.as_deref()).await;
     if !models.is_empty() {
         println!("  \x1b[2mmodels on your account ({}):\x1b[0m", models.len());
         for m in models.iter().take(8) {

@@ -776,7 +776,7 @@ impl FallbackChain {
             "{}/v1internal:generateContent?alt=sse",
             proxy_fire_providers::antigravity::ANTIGRAVITY_API_BASE
         );
-        let project = proxy_fire_providers::antigravity::project_id(&self.http, &access)
+        let project = proxy_fire_providers::antigravity::project_id(&self.http, &access, refresh)
             .await
             .ok();
         let session = proxy_fire_providers::antigravity::new_session_id();
@@ -784,7 +784,7 @@ impl FallbackChain {
         let requested = body.get("model").and_then(|m| m.as_str()).unwrap_or("");
         let translated =
             proxy_fire_providers::antigravity::build_request(body, requested, project.as_deref());
-        let mut headers = proxy_fire_providers::antigravity::antigravity_client_headers();
+        let mut headers = proxy_fire_providers::antigravity::antigravity_client_headers(refresh);
         for (k, v) in &cfg.extra_headers {
             if let Some(h) = headers.iter_mut().find(|h| h.0.eq_ignore_ascii_case(k)) {
                 h.1 = v.clone();
