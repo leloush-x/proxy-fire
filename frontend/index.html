@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Control Desk</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* ================= config: theme ================= */
+:root{
+  --bg:#f4f6f3; --surface:#ffffff; --line:#dfe3dd; --fg:#141915; --muted:#5f6a62;
+  --accent:#0b7a6b; --accent-ink:#ffffff; --accent-soft:#d9ede9;
+  --ok:#167a47; --ok-soft:#daefe2; --warn:#8f5705; --warn-soft:#f6ecd2;
+  --bad:#ab2a22; --bad-soft:#f9e2e0; --track:#e7eae5; --off:#c3cac2;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0c110f; --surface:#141b17; --line:#243029; --fg:#e4eae5; --muted:#8b968d;
+    --accent:#5fd2bd; --accent-ink:#04231d; --accent-soft:#153530;
+    --ok:#52d18d; --ok-soft:#133120; --warn:#f2b848; --warn-soft:#3a2a12;
+    --bad:#f2786f; --bad-soft:#3a1b19; --track:#1c2621; --off:#3c4a42;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0c110f; --surface:#141b17; --line:#243029; --fg:#e4eae5; --muted:#8b968d;
+  --accent:#5fd2bd; --accent-ink:#04231d; --accent-soft:#153530;
+  --ok:#52d18d; --ok-soft:#133120; --warn:#f2b848; --warn-soft:#3a2a12;
+  --bad:#f2786f; --bad-soft:#3a1b19; --track:#1c2621; --off:#3c4a42;
+  color-scheme:dark;
+}
+
+/* ================= layout ================= */
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h3{margin:0;letter-spacing:-.01em}
+h1{font-size:24px;font-weight:600}
+h3{font-size:13px;font-weight:600}
+p{margin:0}
+code,.mono{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+code{background:var(--track);padding:1px 6px;border-radius:5px;overflow-wrap:anywhere}
+.muted{color:var(--muted)}
+.wrap{max-width:1160px;margin:0 auto;padding:20px 16px 56px}
+.top{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-top:12px;padding-bottom:12px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;text-decoration:none;color:var(--fg)}
+.brand i{width:10px;height:10px;border-radius:3px;background:var(--accent)}
+.tabs{display:flex;gap:4px;margin-right:auto;flex-wrap:wrap}
+.tabs a{padding:6px 12px;border-radius:8px;color:var(--muted);text-decoration:none;font-weight:500}
+.tabs a[aria-current="page"]{background:var(--surface);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line)}
+.right{display:flex;gap:8px;align-items:center}
+.stack{display:grid;gap:12px}
+.g-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.g-2{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:12px}
+.g-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0}
+.card-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.sub{color:var(--muted);font-size:12.5px}
+.kpi .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:500}
+.kpi .val{font:600 25px/1.1 var(--mono);margin-top:8px;letter-spacing:-.02em}
+.kpi .of{font-size:16px;color:var(--muted)}
+.kpi .note{font-size:12.5px;color:var(--muted);margin-top:6px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;background:var(--track);color:var(--muted);white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.dot{animation:none}}
+.btn,.ghost{font:inherit;font-weight:500;border-radius:8px;padding:8px 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.btn{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.ghost.sm{padding:4px 10px;font-size:12.5px}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:baseline}
+.bars{display:flex;align-items:flex-end;gap:3px;height:180px;border-bottom:1px solid var(--line)}
+.col{flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end}
+.seg{display:block;width:100%}
+.seg.ok{background:var(--accent);opacity:.9}
+.seg.err{background:var(--bad);border-radius:3px 3px 0 0}
+.axis{display:flex;gap:3px;margin-top:6px;font:11px/1 var(--mono);color:var(--muted)}
+.axis span{flex:1;min-width:0;white-space:nowrap}
+.spark{display:block;width:100%;height:180px}
+.spark path{fill:none;stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.spark .l50{stroke:var(--accent)}
+.spark .l95{stroke:var(--warn)}
+.spark .area{fill:var(--accent-soft);stroke:none}
+.spark line{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.brow{display:grid;grid-template-columns:minmax(0,1fr) minmax(50px,1fr) auto;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:13px}
+.brow > span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brow b{font:500 12.5px var(--mono)}
+.track{height:8px;border-radius:99px;background:var(--track);overflow:hidden}
+.track i{display:block;height:100%;border-radius:99px;background:var(--accent)}
+.track i.warn{background:var(--warn)}
+.track i.bad{background:var(--bad)}
+.ev{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:13px}
+.ev time{font:12px var(--mono);color:var(--muted)}
+.ev code{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:none;padding:0}
+.ev .mono{color:var(--muted);text-align:right}
+.head{margin-bottom:14px}
+.head p{color:var(--muted);margin-top:4px}
+.toolbar{display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.toolbar input{flex:1;min-width:0;max-width:360px;font:inherit;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.plist{display:grid;gap:10px}
+.prov{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.prov-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto auto;gap:14px;align-items:center;padding:12px 14px}
+.chev{width:28px;height:28px;border:0;border-radius:8px;background:transparent;color:var(--muted);font-size:18px;cursor:pointer;transition:transform .15s;line-height:1}
+.chev[aria-expanded="true"]{transform:rotate(90deg);color:var(--fg)}
+.prov-id{min-width:0;display:grid;gap:3px}
+.prov-id strong{font-weight:600}
+.prov-id code{width:max-content;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.prov-meta{display:flex;gap:14px;color:var(--muted);font-size:12.5px;white-space:nowrap}
+.prov.is-off .prov-id strong{color:var(--muted)}
+.prov.is-off .prov-meta{opacity:.6}
+.models{border-top:1px solid var(--line);padding:4px 14px 6px}
+.models-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;font-size:12.5px;flex-wrap:wrap}
+.bulk{display:flex;gap:6px}
+.model{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:16px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.m-id{min-width:0;display:grid;gap:2px}
+.m-id code{width:max-content;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m-id small{color:var(--muted);font-size:12px}
+.stat{color:var(--muted);font-size:12.5px;white-space:nowrap}
+.model.dim .m-id code,.model.dim .stat{opacity:.55}
+.switch{position:relative;width:38px;height:22px;border-radius:99px;border:0;background:var(--off);cursor:pointer;flex:none;transition:background .15s;padding:0}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.switch[aria-checked="true"]{background:var(--accent)}
+.switch[aria-checked="true"]::after{transform:translateX(16px)}
+.switch.sm{width:32px;height:18px}
+.switch.sm::after{width:12px;height:12px;top:3px}
+.switch.sm[aria-checked="true"]::after{transform:translateX(14px)}
+.empty{padding:24px;text-align:center}
+.hero{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+.hero h1{margin-bottom:6px}
+.hero p{color:var(--muted)}
+.notice{color:var(--warn);margin-top:6px;font-size:12.5px}
+#toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,16px);opacity:0;transition:opacity .2s,transform .2s;background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:8px;font-size:13px;pointer-events:none;max-width:calc(100% - 32px);z-index:20}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast[data-bad="1"]{background:var(--bad);color:#fff}
+@media (max-width:900px){.g-3,.g-2{grid-template-columns:1fr}}
+@media (max-width:760px){
+  .g-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .prov-head{grid-template-columns:auto minmax(0,1fr) auto auto}
+  .prov-meta{display:none}
+  .model{grid-template-columns:minmax(0,1fr) auto}
+  .model .stat{display:none}
+  .tabs{order:3;width:100%;margin-right:0}
+}
+@media (max-width:390px){
+  body,.wrap{font-size:13px}
+  .card{padding:12px}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#overview"><i></i>API Control</a>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#overview" data-nav="overview">Overview</a>
+      <a href="#providers" data-nav="providers">Providers</a>
+    </nav>
+    <div class="right">
+      <span class="pill" id="mode"></span>
+      <button class="ghost sm" id="theme" type="button" aria-label="Toggle theme">Auto</button>
+    </div>
+  </div>
+</header>
+<main class="wrap" id="app"></main>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+
+/* ================= config — connect your API here ================= */
+// Leave apiBase empty to run on sample data. To connect a live proxy set it
+// to your base URL, e.g. "http://localhost:8080" — the page will then read
+//   GET  /v1/admin/providers
+//   GET  /v1/admin/stats
+//   PATCH /v1/admin/providers/:id              {"enabled": true|false}
+//   PATCH /v1/admin/providers/:id/models/:model {"enabled": true|false}
+const CONFIG = { apiBase: "", refreshMs: 5000 };
+const KEY = "apictl.v1";   // localStorage key for sample-mode toggle state
+
+/* ================= sample data (clearly labelled in UI) ================= */
+const SEED = [
+  { id: "anthropic", name: "Anthropic", url: "api.anthropic.com/v1", enabled: true, health: "ok", lat: 420, models: [
+    { id: "claude-sonnet-5-5", ctx: "200K", enabled: true,  req: 9120,  p50: 540 },
+    { id: "claude-opus-5-5",   ctx: "200K", enabled: true,  req: 2310,  p50: 980 },
+    { id: "claude-haiku-5-5",  ctx: "200K", enabled: true,  req: 14880, p50: 210 },
+    { id: "claude-fable-5-2",  ctx: "200K", enabled: false, req: 0,     p50: 0 } ] },
+  { id: "openai", name: "OpenAI", url: "api.openai.com/v1", enabled: true, health: "ok", lat: 360, models: [
+    { id: "gpt-4.1",      ctx: "1M",   enabled: true,  req: 6400, p50: 620 },
+    { id: "gpt-4.1-mini", ctx: "1M",   enabled: true,  req: 8200, p50: 280 },
+    { id: "gpt-4o-mini",  ctx: "128K", enabled: false, req: 0,    p50: 0 } ] },
+  { id: "gemini", name: "Google Gemini", url: "generativelanguage.googleapis.com", enabled: true, health: "warn", lat: 510, models: [
+    { id: "gemini-2.5-pro",   ctx: "1M", enabled: true, req: 3300, p50: 880 },
+    { id: "gemini-2.5-flash", ctx: "1M", enabled: true, req: 5600, p50: 340 } ] },
+  { id: "groq", name: "Groq", url: "api.groq.com/openai/v1", enabled: false, health: "ok", lat: 140, models: [
+    { id: "llama-3.3-70b-versatile", ctx: "128K", enabled: true, req: 2100, p50: 190 } ] },
+  { id: "ollama", name: "Ollama (local)", url: "localhost:11434", enabled: true, health: "down", lat: 0, models: [
+    { id: "qwen3-coder", ctx: "256K", enabled: true,  req: 0, p50: 0 },
+    { id: "llama3.2",    ctx: "128K", enabled: false, req: 0, p50: 0 } ] }
+];
+
+/* ================= helpers ================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n));
+const pct = (a, b) => b ? (100 * a / b).toFixed(1) + "%" : "–";
+const pad = n => String(n).padStart(2, "0");
+const HM = mins => new Date(Date.now() - mins * 6e4).toTimeString().slice(0, 5);
+const HEALTH = { ok: ["ok", "Healthy"], warn: ["warn", "Elevated errors"], down: ["bad", "Down"] };
+
+const store = { view: "overview", query: "", open: new Set(), providers: [], stats: null, sample: true, notice: "" };
+
+/* ================= data layer ================= */
+function readLocal() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } }
+function writeLocal(o) { try { localStorage.setItem(KEY, JSON.stringify(o)); } catch { /* quota */ } }
+
+async function jget(path) {
+  const r = await fetch(CONFIG.apiBase + path, { headers: { "accept": "application/json" } });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+async function apiSave(pid, mid, enabled) {
+  if (!CONFIG.apiBase) { const o = readLocal(); o[mid ? pid + "/" + mid : pid] = enabled; writeLocal(o); return; }
+  const path = mid
+    ? `/v1/admin/providers/${encodeURIComponent(pid)}/models/${encodeURIComponent(mid)}`
+    : `/v1/admin/providers/${encodeURIComponent(pid)}`;
+  const r = await fetch(CONFIG.apiBase + path, {
+    method: "PATCH",
+    headers: { "content-type": "application/json", "accept": "application/json" },
+    body: JSON.stringify({ enabled })
+  });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+}
+
+async function loadAll() {
+  store.notice = "";
+  if (CONFIG.apiBase) {
+    try {
+      const [providers, stats] = await Promise.all([jget("/v1/admin/providers"), jget("/v1/admin/stats")]);
+      Object.assign(store, { providers, stats, sample: false });
+      return;
+    } catch { store.notice = "Can't reach the API — showing sample data."; }
+  }
+  const o = readLocal();
+  store.providers = JSON.parse(JSON.stringify(SEED)).map(p => ({
+    ...p,
+    enabled: o[p.id] ?? p.enabled,
+    models: p.models.map(m => ({ ...m, enabled: o[`${p.id}/${m.id}`] ?? m.enabled }))
+  }));
+  store.stats = makeStats(store.providers);
+  store.sample = true;
+}
+
+async function refreshStats() {
+  if (CONFIG.apiBase) { store.stats = await jget("/v1/admin/stats"); return; }
+  store.stats = makeStats(store.providers);
+}
+
+/* deterministic pseudo-random for stable sample stats */
+function rnd(seed) { let s = seed; return () => (s = s * 16807 % 2147483647) / 2147483647; }
+
+/* build a 24h sample stats object from the seeded provider table */
+function makeStats(P) {
+  const r = rnd(11);
+  const live = P.filter(p => p.enabled).flatMap(p => p.models.filter(m => m.enabled).map(m => ({ ...m, provider: p.name })));
+  const load = live.reduce((a, m) => a + m.req, 0);
+  const hourly = Array.from({ length: 24 }, (_, i) => {
+    const wave = 0.6 + 0.4 * Math.abs(Math.sin((i + 5) / 4));
+    const tot = Math.round(load / 24 * wave * (0.9 + 0.2 * r()));
+    const err = Math.round(tot * (0.004 + 0.02 * r()));
+    return { ok: tot - err, err };
+  });
+  const p50 = Array.from({ length: 24 }, () => Math.round(260 + 220 * r()));
+  const p95 = p50.map(v => Math.round(v * (1.9 + 0.7 * r())));
+  const total = hourly.reduce((a, h) => a + h.ok + h.err, 0);
+  const errs = hourly.reduce((a, h) => a + h.err, 0);
+  const halfErrs = Math.round(errs * 0.5);
+  const thirdErrs = Math.round(errs * 0.3);
+  const codes = [
+    { code: 200, label: "OK",             cls: "",     n: total - errs },
+    { code: 429, label: "Rate limited",   cls: "warn", n: halfErrs },
+    { code: 500, label: "Upstream error", cls: "bad",  n: thirdErrs },
+    { code: 504, label: "Timeout",        cls: "bad",  n: errs - halfErrs - thirdErrs }
+  ];
+  const share = P.filter(p => p.enabled)
+    .map(p => ({ name: p.name, n: p.models.filter(m => m.enabled).reduce((a, m) => a + m.req, 0) }))
+    .sort((a, b) => b.n - a.n);
+  const events = live.length ? Array.from({ length: 8 }, (_, i) => {
+    const m = live[Math.floor(r() * live.length)];
+    const pick = r();
+    const code = pick < 0.95 ? 200 : pick < 0.75 ? 429 : 500;
+    return { t: HM(i * 3 + 1), model: m.id, code, ms: Math.round(Math.max(m.p50, 180) * (0.7 + 1.2 * r())) };
+  }) : [];
+  return { hourly, p50, p95, codes, share, events };
+}
+
+/* sample mode: inject a fresh request into the last hour so the page feels live */
+function bump() {
+  const s = store.stats; if (!s) return;
+  const n = 1 + Math.floor(Math.random() * 9), bad = Math.random() < 0.2 ? 1 : 0;
+  const h = s.hourly[23]; h.ok += n - bad; h.err += bad;
+  const live = store.providers.filter(p => p.enabled).flatMap(p => p.models.filter(m => m.enabled));
+  if (live.length) {
+    s.events.unshift({ t: HM(0), model: live[Math.floor(Math.random() * live.length)].id, code: bad ? 500 : 200, ms: 180 + Math.floor(Math.random() * 500) });
+    s.events.splice(8);
+  }
+}
+
+function counts() {
+  const P = store.providers, on = P.filter(p => p.enabled);
+  return {
+    provOn: on.length, provAll: P.length,
+    modelLive: on.reduce((a, p) => a + p.models.filter(m => m.enabled).length, 0),
+    modelAll: P.reduce((a, p) => a + p.models.length, 0)
+  };
+}
+const find = id => store.providers.find(p => p.id === id);
+
+/* ================= charts (SVG / CSS only) ================= */
+function sparkSVG(p95, p50) {
+  const W = 600, H = 180, mx = Math.max(1, ...p95) * 1.08, n = p95.length;
+  const X = i => (i / (n - 1) * W).toFixed(1), Y = v => (H - v / mx * H).toFixed(1);
+  const path = arr => arr.map((v, i) => (i ? "L" : "M") + X(i) + " " + Y(v)).join(" ");
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Latency p50 and p95 over 24 hours">
+    ${[0.25, 0.5, 0.75].map(f => `<line x1="0" x2="${W}" y1="${H * f}" y2="${H * f}"/>`).join("")}
+    <path class="area" d="${path(p95)} L${W} ${H} L0 ${H} Z"/>
+    <path class="l95" d="${path(p95)}"/>
+    <path class="l50" d="${path(p50)}"/>
+  </svg>`;
+}
+
+/* ================= views ================= */
+function viewOverview() {
+  const s = store.stats, c = counts(), now = new Date();
+  const tot = s.hourly.reduce((a, h) => a + h.ok + h.err, 0);
+  const errs = s.hourly.reduce((a, h) => a + h.err, 0);
+  const hMax = Math.max(1, ...s.hourly.map(h => h.ok + h.err));
+  const hr = i => (now.getHours() - 23 + i + 48) % 24;
+  const bars = s.hourly.map((h, i) =>
+    `<div class="col" title="${pad(hr(i))}:00 — ${fmt(h.ok)} ok, ${fmt(h.err)} failed">
+       <i class="seg err" style="height:${(h.err / hMax * 100).toFixed(2)}%"></i>
+       <i class="seg ok" style="height:${(h.ok / hMax * 100).toFixed(2)}%"></i>
+     </div>`).join("");
+  const axis = s.hourly.map((_, i) => `<span>${hr(i) % 4 ? "" : pad(hr(i))}</span>`).join("");
+  const down = store.providers.filter(p => p.enabled && p.health !== "ok");
+  const cMax = Math.max(1, ...s.codes.map(x => x.n));
+  const sMax = Math.max(1, ...s.share.map(x => x.n));
+  const kpi = (l, v, n) => `<div class="card kpi"><div class="lbl">${l}</div><div class="val">${v}</div><div class="note">${n}</div></div>`;
+  return `
+  <section class="card hero">
+    <div>
+      <span class="pill ${down.length ? "warn" : "ok"}"><i class="dot"></i>${down.length ? "Degraded" : "All systems running"}</span>
+      <h1>${down.length ? esc(down.map(p => p.name).join(", ")) + (down.length > 1 ? " need attention" : " needs attention") : "Routing normally"}</h1>
+      <p>${c.provOn} of ${c.provAll} providers and ${c.modelLive} of ${c.modelAll} models are live. Updated ${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.</p>
+      ${store.notice ? `<p class="notice">${esc(store.notice)}</p>` : ""}
+    </div>
+    <a class="btn" href="#providers">Manage providers</a>
+  </section>
+  <div class="g-kpi">
+    ${kpi("Requests · 24h", fmt(tot), `${fmt(tot - errs)} succeeded`)}
+    ${kpi("Success rate", tot ? (100 * (tot - errs) / tot).toFixed(2) + "%" : "–", `${fmt(errs)} failed`)}
+    ${kpi("p95 latency", `${s.p95[23]} ms`, `p50 ${s.p50[23]} ms`)}
+    ${kpi("Models live", `${c.modelLive}<span class="of">/${c.modelAll}</span>`, `${c.provOn} of ${c.provAll} providers on`)}
+  </div>
+  <div class="g-2">
+    <section class="card">
+      <div class="card-h"><div><h3>Requests per hour</h3><p class="sub">Last 24 hours · local time</p></div>
+        <div class="legend"><span><i style="background:var(--accent)"></i>Succeeded</span><span><i style="background:var(--bad)"></i>Failed</span></div></div>
+      <div class="bars">${bars}</div>
+      <div class="axis">${axis}</div>
+    </section>
+    <section class="card">
+      <div class="card-h"><div><h3>Latency</h3><p class="sub">Median vs p95</p></div>
+        <div class="legend"><span><i style="background:var(--accent)"></i>p50 ${s.p50[23]} ms</span><span><i style="background:var(--warn)"></i>p95 ${s.p95[23]} ms</span></div></div>
+      ${sparkSVG(s.p95, s.p50)}
+      <div class="axis">${axis}</div>
+    </section>
+  </div>
+  <div class="g-3">
+    <section class="card">
+      <div class="card-h"><h3>Status codes</h3><span class="sub">24h</span></div>
+      ${s.codes.map(x => `<div class="brow"><span><code>${x.code}</code> ${esc(x.label)}</span><span class="track"><i class="${x.cls}" style="width:${(x.n / cMax * 100).toFixed(1)}%"></i></span><b>${fmt(x.n)}</b></div>`).join("")}
+    </section>
+    <section class="card">
+      <div class="card-h"><h3>Traffic by provider</h3><span class="sub">share</span></div>
+      ${s.share.length
+        ? s.share.map(x => `<div class="brow"><span>${esc(x.name)}</span><span class="track"><i style="width:${(x.n / sMax * 100).toFixed(1)}%"></i></span><b>${pct(x.n, tot)}</b></div>`).join("")
+        : `<p class="muted">No providers are on.</p>`}
+    </section>
+    <section class="card">
+      <div class="card-h"><h3>Recent requests</h3><span class="sub">live</span></div>
+      ${s.events.length
+        ? s.events.map(e => `<div class="ev"><time>${esc(e.t)}</time><code>${esc(e.model)}</code><span class="pill ${e.code < 300 ? "ok" : e.code < 500 ? "warn" : "bad"}">${e.code}</span><span class="mono">${e.ms} ms</span></div>`).join("")
+        : `<p class="muted">No traffic yet. Turn a model on to see requests.</p>`}
+    </section>
+  </div>`;
+}
+
+function viewProviders() {
+  const q = store.query.trim().toLowerCase();
+  const html = store.providers.map(p => {
+    const match = !q || p.name.toLowerCase().includes(q) || p.models.some(m => m.id.toLowerCase().includes(q));
+    if (!match) return "";
+    const open = store.open.has(p.id) || !!q;
+    const h = HEALTH[p.health] || HEALTH.ok;
+    const req = p.models.reduce((a, m) => a + m.req, 0);
+    const onM = p.models.filter(m => m.enabled).length;
+    const models = q ? p.models.filter(m => m.id.toLowerCase().includes(q)) : p.models;
+    return `<article class="prov${p.enabled ? "" : " is-off"}">
+      <header class="prov-head">
+        <button class="chev" type="button" data-act="open" data-p="${esc(p.id)}" aria-expanded="${open}" aria-label="Toggle models for ${esc(p.name)}">›</button>
+        <div class="prov-id"><strong>${esc(p.name)}</strong><code>${esc(p.url)}</code></div>
+        <span class="pill ${h[0]}">${h[1]}</span>
+        <div class="prov-meta"><span>${onM}/${p.models.length} models on</span><span>${fmt(req)} req</span><span>${p.lat} ms</span></div>
+        <button class="switch" type="button" role="switch" aria-checked="${p.enabled}" data-act="prov" data-p="${esc(p.id)}" aria-label="${p.enabled ? "Turn off" : "Turn on"} ${esc(p.name)}"></button>
+      </header>
+      ${open ? `<div class="models">
+        <div class="models-bar"><span class="muted">${p.enabled
+          ? "Models below get traffic while they are on."
+          : "Provider is off — no models below receive traffic."}</span>
+          <span class="bulk"><button class="ghost sm" type="button" data-act="bulk" data-p="${esc(p.id)}" data-on="1">All on</button><button class="ghost sm" type="button" data-act="bulk" data-p="${esc(p.id)}" data-on="0">All off</button></span></div>
+        ${models.map(m => `<div class="model${m.enabled ? "" : " dim"}">
+          <div class="m-id"><code>${esc(m.id)}</code><small>${esc(m.ctx)} context</small></div>
+          <span class="stat">${fmt(m.req)} req</span><span class="stat">${m.p50} ms p50</span>
+          <button class="switch sm" type="button" role="switch" aria-checked="${m.enabled}" data-act="model" data-p="${esc(p.id)}" data-m="${esc(m.id)}" aria-label="${m.enabled ? "Turn off" : "Turn on"} ${esc(m.id)}"></button>
+        </div>`).join("") || `<p class="muted empty">No models match.</p>`}
+      </div>` : ""}
+    </article>`;
+  }).join("");
+  return html || `<p class="muted empty">Nothing matches “${esc(store.query)}”.</p>`;
+}
+
+function mount() {
+  document.querySelectorAll("[data-nav]").forEach(a => a.setAttribute("aria-current", a.dataset.nav === store.view ? "page" : "false"));
+  $("#app").innerHTML = store.view === "providers"
+    ? `<div class="head"><h1>Providers</h1><p>Turn a whole provider or one model on or off. Changes apply right away. Turning a provider back on restores each model's own state.</p></div>
+       <div class="toolbar"><input id="q" type="search" placeholder="Search providers or models" aria-label="Search" value="${esc(store.query)}"><span class="mono muted" id="count"></span></div>
+       <div class="plist" id="plist"></div>`
+    : `<div class="stack" id="ov"><p class="muted">Loading…</p></div>`;
+}
+
+function paint() {
+  if (!store.stats) return;
+  if (store.view === "providers") {
+    const c = counts();
+    const el = $("#plist"), ev = $("#count");
+    if (el) el.innerHTML = viewProviders();
+    if (ev) ev.textContent = `${c.provOn}/${c.provAll} providers · ${c.modelLive}/${c.modelAll} models live`;
+  } else {
+    const el = $("#ov");
+    if (el) el.innerHTML = viewOverview();
+  }
+  $("#mode").innerHTML = `<i class="dot"></i>${store.sample ? "Sample data" : "Live API"}`;
+}
+
+function route() {
+  const v = location.hash === "#providers" ? "providers" : "overview";
+  if (v !== store.view || !$("#app").firstElementChild) { store.view = v; mount(); }
+  paint();
+}
+
+/* ================= controls: optimistic updates with revert on failure ================= */
+let toastTimer = null;
+function toast(msg, bad) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.dataset.bad = bad ? "1" : "0";
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+async function persist(pid, mid, next, msg) {
+  // Apply optimistically; refresh & revert on failure.
+  const prev = new Map();
+  const p = find(pid);
+  const items = mid === null ? p.models : p.models.filter(m => m.id === mid);
+  items.forEach(m => prev.set(m.id, m.enabled));
+  items.forEach(m => { m.enabled = next; });
+  if (mid === null) p.enabled = next;
+  paint();
+  try {
+    if (mid === null) await apiSave(pid, null, next);
+    else for (const it of items) await apiSave(pid, it.id, next);
+    await refreshStats(); paint(); toast(msg);
+  } catch {
+    items.forEach(m => { m.enabled = prev.get(m.id); });
+    if (mid === null) p.enabled = !next;
+    paint(); toast("Couldn't save. Restored the previous state.", true);
+  }
+}
+
+async function toggleProvider(pid) {
+  const p = find(pid);
+  await persist(pid, null, !p.enabled, `${p.name} ${!p.enabled ? "on" : "off"}`);
+}
+async function toggleModel(pid, mid) {
+  const p = find(pid), m = p.models.find(x => x.id === mid);
+  await persist(pid, mid, !m.enabled, `${mid} ${!m.enabled ? "on" : "off"}`);
+}
+async function bulk(pid, on) {
+  const p = find(pid);
+  const next = on === "1";
+  // Bulk: turn every model on/off together.
+  const prev = p.models.map(m => m.enabled);
+  p.models.forEach(m => { m.enabled = next; });
+  paint();
+  try {
+    for (const m of p.models) await apiSave(pid, m.id, next);
+    await refreshStats(); paint(); toast(`${p.name}: all models ${next ? "on" : "off"}`);
+  } catch (e) {
+    p.models.forEach((m, i) => { m.enabled = prev[i]; });
+    paint(); toast("Couldn't save. Restored the previous state.", true);
+  }
+}
+
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-act]");
+  if (!el) return;
+  const { act, p, m, on } = el.dataset;
+  if (act === "open") { store.open.has(p) ? store.open.delete(p) : store.open.add(p); paint(); }
+  else if (act === "prov") toggleProvider(p);
+  else if (act === "model") toggleModel(p, m);
+  else if (act === "bulk") bulk(p, on);
+});
+document.addEventListener("input", e => { if (e.target.id === "q") { store.query = e.target.value; paint(); } });
+
+/* ================= theme toggle ================= */
+const THEMES = [null, "light", "dark"], THEME_LABEL = ["Auto", "Light", "Dark"];
+let themeIdx = 0;
+$("#theme").addEventListener("click", () => {
+  themeIdx = (themeIdx + 1) % THEMES.length;
+  const t = THEMES[themeIdx];
+  if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+  $("#theme").textContent = THEME_LABEL[themeIdx];
+});
+
+/* ================= start ================= */
+window.addEventListener("hashchange", route);
+route();
+loadAll().then(() => {
+  if (store.providers[0]) store.open.add(store.providers[0].id);
+  paint();
+});
+
+setInterval(async () => {
+  if (store.sample) { bump(); paint(); return; }
+  if (store.view !== "overview") return;
+  try { store.stats = await jget("/v1/admin/stats"); paint(); } catch { /* keep last good data */ }
+}, CONFIG.refreshMs);
+</script>
+</body>
+</html>
