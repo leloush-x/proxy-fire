@@ -172,7 +172,7 @@ providers:
     # Upstream is always streamed and reassembled to a normal completion.
     discovery:
       models_endpoint: "/ai/cline/recommended-models"
-    preferred_volume_model: "deepseek/deepseek-v4-flash"
+    preferred_volume_model: "cline-free/nemotron-3.5-super-vl"
     rate_limit_notes: "Free-tier daily inference cap (INFERENCE_CAP_ERROR 429, body carries 'Try again in Xh Ym'). 429 benches that account slot until reset; rejected accounts are benched 10 min."
 
   - id: groq

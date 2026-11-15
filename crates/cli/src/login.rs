@@ -142,6 +142,18 @@ async fn cline_login(p: &ProviderConfig) -> Result<()> {
     .map_err(anyhow::Error::msg)
     .context("registering with Cline")?;
     println!("\n  \x1b[32m✓ signed in as {}\x1b[0m", reg.email);
+    let free = proxy_fire_providers::cline::list_free_models(&client, &reg.access_token).await;
+    if !free.is_empty() {
+        println!(
+            "  \x1b[2mfree models on your account ({}):\x1b[0m",
+            free.len()
+        );
+        for m in free.iter().take(8) {
+            println!("    · {m}");
+        }
+    } else {
+        println!("  \x1b[2m(no free models listed right now — they rotate; proxy-fire scan update re-syncs)\x1b[0m");
+    }
 
     // First free slot: base var if unset, else the first free _N.
     let mut slot = 1usize;

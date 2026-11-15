@@ -92,21 +92,26 @@ pub fn extract_rate_limit_info(
     info
 }
 
-/// Cline daily-cap 429 (INFERENCE_CAP_ERROR) body → cooldown hint.
-/// Bodies look like: "…INFERENCE_CAP_ERROR… Try again in 17h 59m…".
+/// Cline free/ClinePass daily-cap bodies → cooldown hint.
+/// Real markers (from the Cline SDK, sdk/packages/llms/src/providers/errors.ts):
+///   "free limit reached on model … Try again in 23h 59m"   (free tier, HTTP 429)
+///   "you have reached your … clinepass limit … try again later."
 /// When the cap is present but unparseable, bench the slot for 18h
 /// (Cline's free quota resets daily).
 fn extract_cline(info: &mut RateLimitInfo, body: &[u8]) {
     let text = String::from_utf8_lossy(body);
     let lower = text.to_ascii_lowercase();
-    if !lower.contains("inference_cap") && !lower.contains("try again in") {
+    let has_cap = lower.contains("free limit reached on model")
+        || lower.contains("clinepass limit")
+        || lower.contains("try again in");
+    if !has_cap {
         return;
     }
     let ms = proxy_fire_providers_cline_parse_ms(body);
     if ms > 0 {
         info.retry_after_ms = ms;
     } else {
-        // Conservative default: 18h
+        // Conservative default: 18h (free quota resets daily)
         info.retry_after_ms = 18 * 3_600_000;
     }
 }

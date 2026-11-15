@@ -681,25 +681,12 @@ impl FallbackChain {
         }
         let access = proxy_fire_providers::cline::ensure_access_token(&self.http, refresh).await?;
         let url = chat_endpoint_of(cfg);
-        let session = body
-            .get("session_id")
-            .and_then(|s| s.as_str())
-            .unwrap_or("sess_0")
-            .to_string();
+        let session = proxy_fire_providers::cline::new_session_id();
         let data = serde_json::to_vec(body).map_err(|e| format!("encoding request: {e}"))?;
-        // Cline's free tier is gated to Cline product surfaces; these headers
-        // identify as the Cline CLI. User-configured extra_headers override.
-        let mut headers: Vec<(String, String)> = vec![
-            ("User-Agent".into(), "Cline/3.0.50".into()),
-            ("HTTP-Referer".into(), "https://cline.bot".into()),
-            ("X-Title".into(), "Cline".into()),
-            ("X-IS-MULTIROOT".into(), "false".into()),
-            ("X-CLIENT-TYPE".into(), "cline-cli".into()),
-            ("X-CLIENT-VERSION".into(), "3.0.50".into()),
-            ("X-PLATFORM".into(), "terminal".into()),
-            ("X-PLATFORM-VERSION".into(), "3.0.50".into()),
-            ("X-CORE-VERSION".into(), "0.0.70".into()),
-        ];
+        // Cline's free tier is gated to Cline product surfaces; the cline
+        // client-identity headers make the proxy indistinguishable from the
+        // official CLI. User-configured extra_headers override them.
+        let mut headers = proxy_fire_providers::cline::cline_client_headers();
         for (k, v) in &cfg.extra_headers {
             if let Some(h) = headers.iter_mut().find(|h| h.0.eq_ignore_ascii_case(k)) {
                 h.1 = v.clone();
@@ -713,8 +700,8 @@ impl FallbackChain {
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {access}")) // access already carries the workos: prefix
             .header("X-Task-ID", &session);
-        for (k, v) in &headers {
-            req = req.header(k.as_str(), v.as_str());
+        for (k, v) in headers {
+            req = req.header(k, v);
         }
         req = req.body(data);
         if let Some(d) = proxy_fire_core::config::parse_duration(&cfg.timeout) {
@@ -846,16 +833,10 @@ impl FallbackChain {
                     );
                 }
             }
-            // Cline: session correlation + reasoning effort defaults + always
-            // stream upstream (aggregated back to JSON in call_cline).
+            // Cline wire format (from the Cline SDK): X-Task-ID header carries
+            // the session (not the body); reasoning is a top-level
+            // reasoning_effort forwarded verbatim; upstream always streams.
             if provider_id == "cline" {
-                let session = obj
-                    .get("session_id")
-                    .and_then(|v| v.as_str())
-                    .filter(|s| !s.is_empty())
-                    .map(str::to_string)
-                    .unwrap_or_else(proxy_fire_providers::cline::new_session_id);
-                obj.insert("session_id".to_string(), Value::String(session));
                 if obj.get("reasoning_effort").is_none() {
                     obj.insert(
                         "reasoning_effort".to_string(),
@@ -863,6 +844,12 @@ impl FallbackChain {
                     );
                 }
                 obj.insert("stream".to_string(), Value::Bool(true));
+                obj.insert(
+                    "stream_options".to_string(),
+                    serde_json::json!({"include_usage": true}),
+                );
+                obj.remove("session_id");
+                obj.remove("sessionId");
             }
         }
         body

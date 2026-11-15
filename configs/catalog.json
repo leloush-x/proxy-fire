@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-11-09T14:55:24.771823664Z",
+  "updated_at": "2026-11-15T06:14:39.181Z",
   "entries": [
     {
       "provider_id": "openrouter",
@@ -2423,12 +2423,12 @@
     },
     {
       "provider_id": "cline",
-      "model_id": "deepseek/deepseek-v4-flash",
+      "model_id": "cline-free/nemotron-3.5-super-vl",
       "is_free": true,
       "tier_type": "free",
-      "context_window": 200000,
-      "discovered_at": "2026-11-14T19:32:08.704Z",
-      "last_verified_at": "2026-11-14T19:32:08.704Z",
+      "context_window": 262144,
+      "discovered_at": "2026-11-15T06:14:39.181Z",
+      "last_verified_at": "2026-11-15T06:14:39.181Z",
       "metadata": {
         "source": "cline",
         "requires_stream": true
@@ -2436,12 +2436,12 @@
     },
     {
       "provider_id": "cline",
-      "model_id": "poolside/laguna-s-2.1:free",
+      "model_id": "cline-free/solar-mini4",
       "is_free": true,
       "tier_type": "free",
-      "context_window": 200000,
-      "discovered_at": "2026-11-14T19:32:08.704Z",
-      "last_verified_at": "2026-11-14T19:32:08.704Z",
+      "context_window": 262144,
+      "discovered_at": "2026-11-15T06:14:39.181Z",
+      "last_verified_at": "2026-11-15T06:14:39.181Z",
       "metadata": {
         "source": "cline",
         "requires_stream": true
@@ -2449,12 +2449,12 @@
     },
     {
       "provider_id": "cline",
-      "model_id": "stepfun/step-3.7-flash",
+      "model_id": "nvidia/nemotron-3.5-lightning-free",
       "is_free": true,
       "tier_type": "free",
-      "context_window": 200000,
-      "discovered_at": "2026-11-14T19:32:08.704Z",
-      "last_verified_at": "2026-11-14T19:32:08.704Z",
+      "context_window": 262144,
+      "discovered_at": "2026-11-15T06:14:39.181Z",
+      "last_verified_at": "2026-11-15T06:14:39.181Z",
       "metadata": {
         "source": "cline",
         "requires_stream": true

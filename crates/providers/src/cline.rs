@@ -33,11 +33,60 @@ const REFRESH_SKEW_MS: i64 = 60_000;
 /// https://docs.cline.bot/getting-started/free-models). Used when the
 /// authenticated recommended-models sync is unavailable.
 /// (id, context_window, requires_upstream_stream)
+/// Seed free models (from Cline's rotating free-tier promotion, as of Nov 2026;
+/// see https://docs.cline.bot/getting-started/free-models). Used when the
+/// authenticated recommended-models sync is unavailable.
+/// (id, context_window, requires_upstream_stream)
 pub const SEED_FREE_MODELS: &[(&str, i64, bool)] = &[
-    ("deepseek/deepseek-v4-flash", 200_000, true),
-    ("poolside/laguna-s-2.1:free", 200_000, false),
-    ("stepfun/step-3.7-flash", 200_000, true),
+    ("cline-free/nemotron-3.5-super-vl", 262_144, true),
+    ("cline-free/solar-mini4", 262_144, true),
+    ("nvidia/nemotron-3.5-lightning-free", 262_144, true),
 ];
+
+/// Canonical client-identity headers of the Cline CLI (as of v4.0.12).
+/// The free tier is gated to Cline product surfaces; the proxy sends these
+/// (overridable per-provider via extra_headers) to be treated as one.
+pub fn cline_client_headers() -> Vec<(String, String)> {
+    vec![
+        ("User-Agent".to_string(), "Cline/4.0.12".to_string()),
+        ("HTTP-Referer".to_string(), "https://cline.bot".to_string()),
+        ("X-Title".to_string(), "Cline".to_string()),
+        ("X-IS-MULTIROOT".to_string(), "false".to_string()),
+        ("X-CLIENT-TYPE".to_string(), "cline-cli".to_string()),
+        ("X-CLIENT-VERSION".to_string(), "4.0.12".to_string()),
+        ("X-PLATFORM".to_string(), "terminal".to_string()),
+        ("X-PLATFORM-VERSION".to_string(), "4.0.12".to_string()),
+        ("X-CORE-VERSION".to_string(), "4.0.12".to_string()),
+    ]
+}
+
+/// Live free-model list from the recommended-models feed (ids only).
+/// Best-effort: returns an empty vec on any failure.
+pub async fn list_free_models(client: &Client, access_token: &str) -> Vec<String> {
+    let url = format!("{CLINE_API_BASE}/ai/cline/recommended-models");
+    let mut req = client.get(&url).timeout(Duration::from_secs(15));
+    for (k, v) in cline_client_headers() {
+        req = req.header(k, v);
+    }
+    req = req.header("Authorization", format!("Bearer {access_token}"));
+    let Ok(resp) = req.send().await else {
+        return Vec::new();
+    };
+    if resp.status().as_u16() != 200 {
+        return Vec::new();
+    }
+    let Ok(v) = resp.json::<Value>().await else {
+        return Vec::new();
+    };
+    v.get("free")
+        .and_then(|a| a.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|m| m.get("id").and_then(|s| s.as_str()).map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
 
 // ---------------------------------------------------------------------------
 // Access-token cache: refresh tokens are stable; access tokens are short-lived.
@@ -336,17 +385,6 @@ pub async fn register_with_cline(
     })
 }
 
-/// Validate a refresh token by exchanging it for an access token.
-/// Returns the account email when available.
-pub async fn validate_refresh_token(
-    client: &Client,
-    refresh_token: &str,
-) -> Result<String, String> {
-    let access = ensure_access_token(client, refresh_token).await?;
-    let _ = access; // token works
-    Ok("ok".into())
-}
-
 fn tail(s: &str) -> String {
     s.chars().take(300).collect()
 }
@@ -450,7 +488,7 @@ pub fn aggregate_stream(body: &[u8]) -> Result<Vec<u8>, String> {
                     cur_tool_index = idx;
                     cur_tool = Some(json!({
                         "id": tc.get("id").cloned().unwrap_or_else(|| json!("call_cline")),
-                        "type": "function",
+                        "type": "function".to_string(),
                         "function": {"name": "", "arguments": ""},
                     }));
                 }
@@ -476,7 +514,7 @@ pub fn aggregate_stream(body: &[u8]) -> Result<Vec<u8>, String> {
     flush_tool(&mut cur_tool, &mut cur_args, &mut tool_calls);
 
     let mut message = json!({
-        "role": "assistant",
+        "role": "assistant".to_string(),
         "content": content,
     });
     if !reasoning.is_empty() {
@@ -549,13 +587,12 @@ impl crate::Provider for Cline {
                 match ensure_access_token(client, &refresh).await {
                     Ok(access) => {
                         let url = format!("{CLINE_API_BASE}/ai/cline/recommended-models");
-                        match client
-                            .get(&url)
-                            .header("Authorization", access)
-                            .timeout(Duration::from_secs(15))
-                            .send()
-                            .await
-                        {
+                        let mut req = client.get(&url).timeout(Duration::from_secs(15));
+                        for (k, v) in cline_client_headers() {
+                            req = req.header(k, v);
+                        }
+                        req = req.header("Authorization".to_string(), format!("Bearer {access}"));
+                        match req.send().await {
                             Ok(resp) if resp.status().as_u16() == 200 => {
                                 if let Ok(v) = resp.json::<Value>().await {
                                     let mut ids: Vec<String> = Vec::new();
