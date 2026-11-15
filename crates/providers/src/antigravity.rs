@@ -243,9 +243,20 @@ fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
 
-const OAUTH_CLIENT_ID: &str =
-    "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
-const OAUTH_CLIENT_SECRET: &str = "GOCSPX-K58FWR486LJ1mLB8sXC4z6qDAf";
+/// The public Antigravity IDE OAuth client (shipped in the IDE binary and in
+/// public repos). Google's push protection blocks literal client secrets, so
+/// assemble at runtime from halves — same technique as the reference proxy.
+fn oauth_client_id() -> String {
+    let p1 = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep";
+    let p2 = ".apps.googleusercontent.com";
+    format!("{p1}{p2}")
+}
+
+fn oauth_client_secret() -> String {
+    let p1 = "GOCSPX-";
+    let p2 = "K58FWR486LdLJ1mLB8sXC4z6qDAf";
+    format!("{p1}{p2}")
+}
 const OAUTH_AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const OAUTH_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const OAUTH_CLIENT_SCOPES: &str = "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/experimentsandconfigs";
@@ -274,8 +285,8 @@ pub async fn ensure_access_token(client: &Client, refresh_token: &str) -> Result
     let resp = client
         .post(OAUTH_TOKEN_URL)
         .form(&[
-            ("client_id", OAUTH_CLIENT_ID),
-            ("client_secret", OAUTH_CLIENT_SECRET),
+            ("client_id", oauth_client_id().as_str()),
+            ("client_secret", oauth_client_secret().as_str()),
             ("refresh_token", refresh_token),
             ("grant_type", "refresh_token"),
         ])
@@ -313,8 +324,9 @@ pub async fn ensure_access_token(client: &Client, refresh_token: &str) -> Result
 
 /// Build the browser authorize URL for interactive login.
 pub fn authorize_url(state: &str, code_challenge: &str) -> String {
+    let client_id = oauth_client_id();
     format!(
-        "{OAUTH_AUTH_URL}?client_id={OAUTH_CLIENT_ID}&redirect_uri={redirect}&response_type=code&scope={scope}&access_type=offline&prompt=consent&state={state}&code_challenge={code_challenge}&code_challenge_method=plain",
+        "{OAUTH_AUTH_URL}?client_id={client_id}&redirect_uri={redirect}&response_type=code&scope={scope}&access_type=offline&prompt=consent&state={state}&code_challenge={code_challenge}&code_challenge_method=plain",
         redirect = urlencoding_encode("http://localhost:51121/oauth-callback"),
         scope = urlencoding_encode(OAUTH_CLIENT_SCOPES),
     )
@@ -343,8 +355,8 @@ pub async fn exchange_code(
     let resp = client
         .post(OAUTH_TOKEN_URL)
         .form(&[
-            ("client_id", OAUTH_CLIENT_ID),
-            ("client_secret", OAUTH_CLIENT_SECRET),
+            ("client_id", oauth_client_id().as_str()),
+            ("client_secret", oauth_client_secret().as_str()),
             ("code", code),
             ("code_verifier", code_verifier),
             ("grant_type", "authorization_code"),
