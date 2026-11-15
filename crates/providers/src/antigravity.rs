@@ -314,7 +314,7 @@ pub async fn ensure_access_token(client: &Client, refresh_token: &str) -> Result
 /// Build the browser authorize URL for interactive login.
 pub fn authorize_url(state: &str, code_challenge: &str) -> String {
     format!(
-        "{OAUTH_AUTH_URL}?client_id={OAUTH_CLIENT_ID}&redirect_uri={redirect}&response_type=code&scope={scope}&access_type=offline&prompt=consent&state={state}&code_challenge={code_challenge}&code_challenge_method=S256",
+        "{OAUTH_AUTH_URL}?client_id={OAUTH_CLIENT_ID}&redirect_uri={redirect}&response_type=code&scope={scope}&access_type=offline&prompt=consent&state={state}&code_challenge={code_challenge}&code_challenge_method=plain",
         redirect = urlencoding_encode("http://localhost:51121/oauth-callback"),
         scope = urlencoding_encode(OAUTH_CLIENT_SCOPES),
     )
