@@ -537,22 +537,24 @@ fn sse_chat_to_responses(body: &[u8], fallback_model: &str) -> Vec<u8> {
 
     let response_id = new_id("resp");
     let mut out = String::new();
-    let response_shell = |status: &str, output: &Value, usage: Option<&Value>| -> Value {
-        json!({
-            "id": response_id,
-            "object": "response",
-            "created_at": created,
-            "status": status,
-            "model": model,
-            "output": output,
-            "output_text": content,
-            "parallel_tool_calls": true,
-            "tool_choice": "auto",
-            "tools": [],
-            "error": null,
-            "usage": usage_object(usage),
-        })
-    };
+    let response_shell =
+        |event_type: &str, status: &str, output: &Value, usage: Option<&Value>| -> Value {
+            json!({
+                "type": event_type,
+                "id": response_id,
+                "object": "response",
+                "created_at": created,
+                "status": status,
+                "model": model,
+                "output": output,
+                "output_text": content,
+                "parallel_tool_calls": true,
+                "tool_choice": "auto",
+                "tools": [],
+                "error": null,
+                "usage": usage_object(usage),
+            })
+        };
 
     let emit = |out: &mut String, event: &str, data: &Value| {
         out.push_str(&format!("event: {event}\n"));
@@ -597,12 +599,12 @@ fn sse_chat_to_responses(body: &[u8], fallback_model: &str) -> Vec<u8> {
     emit(
         &mut out,
         "response.created",
-        &response_shell("in_progress", &json!([]), None),
+        &response_shell("response.created", "in_progress", &json!([]), None),
     );
     emit(
         &mut out,
         "response.in_progress",
-        &response_shell("in_progress", &json!([]), None),
+        &response_shell("response.in_progress", "in_progress", &json!([]), None),
     );
 
     for (i, item) in output_items.iter().enumerate() {
@@ -695,7 +697,12 @@ fn sse_chat_to_responses(body: &[u8], fallback_model: &str) -> Vec<u8> {
     emit(
         &mut out,
         "response.completed",
-        &response_shell("completed", &json!(output_items), usage.as_ref()),
+        &response_shell(
+            "response.completed",
+            "completed",
+            &json!(output_items),
+            usage.as_ref(),
+        ),
     );
     out.into_bytes()
 }
