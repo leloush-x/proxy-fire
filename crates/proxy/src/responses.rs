@@ -537,22 +537,40 @@ fn sse_chat_to_responses(body: &[u8], fallback_model: &str) -> Vec<u8> {
 
     let response_id = new_id("resp");
     let mut out = String::new();
-    let response_shell =
+    let mut seq = 0u32;
+    // OpenAI state events carry the full response object NESTED under
+    // `response` (openai-node/Codex read event.response.id — a top-level
+    // spread makes it undefined → "Cannot read properties of undefined
+    // (reading 'id')").
+    let mut state_event =
         |event_type: &str, status: &str, output: &Value, usage: Option<&Value>| -> Value {
+            seq += 1;
             json!({
                 "type": event_type,
-                "id": response_id,
-                "object": "response",
-                "created_at": created,
-                "status": status,
-                "model": model,
-                "output": output,
-                "output_text": content,
-                "parallel_tool_calls": true,
-                "tool_choice": "auto",
-                "tools": [],
-                "error": null,
-                "usage": usage_object(usage),
+                "sequence_number": seq,
+                "response": json!({
+                    "id": response_id,
+                    "object": "response",
+                    "created_at": created,
+                    "status": status,
+                    "model": model,
+                    "output": output,
+                    "output_text": if status == "completed" {
+                        content.clone()
+                    } else {
+                        String::new()
+                    },
+                    "parallel_tool_calls": true,
+                    "tool_choice": "auto",
+                    "tools": [],
+                    "error": null,
+                    "incomplete_details": null,
+                    "instructions": null,
+                    "metadata": null,
+                    "temperature": null,
+                    "top_p": null,
+                    "usage": usage_object(usage),
+                }),
             })
         };
 
@@ -599,12 +617,12 @@ fn sse_chat_to_responses(body: &[u8], fallback_model: &str) -> Vec<u8> {
     emit(
         &mut out,
         "response.created",
-        &response_shell("response.created", "in_progress", &json!([]), None),
+        &state_event("response.created", "in_progress", &json!([]), None),
     );
     emit(
         &mut out,
         "response.in_progress",
-        &response_shell("response.in_progress", "in_progress", &json!([]), None),
+        &state_event("response.in_progress", "in_progress", &json!([]), None),
     );
 
     for (i, item) in output_items.iter().enumerate() {
@@ -697,7 +715,7 @@ fn sse_chat_to_responses(body: &[u8], fallback_model: &str) -> Vec<u8> {
     emit(
         &mut out,
         "response.completed",
-        &response_shell(
+        &state_event(
             "response.completed",
             "completed",
             &json!(output_items),
