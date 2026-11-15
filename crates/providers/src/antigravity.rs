@@ -377,7 +377,11 @@ pub async fn exchange_code(
 /// ideType values inconsistently depending on account/tier, so try the primary
 /// and fall back through all five known types.
 fn load_assist_body(ide_type: &str) -> Value {
-    let platform = if ide_type == "ANTIGRAVITY" { "WINDOWS" } else { "PLATFORM_UNSPECIFIED" };
+    let platform = if ide_type == "ANTIGRAVITY" {
+        "WINDOWS"
+    } else {
+        "PLATFORM_UNSPECIFIED"
+    };
     json!({
         "metadata": {
             "ideType": ide_type,
@@ -400,7 +404,13 @@ pub async fn load_code_assist(
         ANTIGRAVITY_PROD_BASE, // prod first (matches IDE behavior)
         ANTIGRAVITY_DAILY_BASE,
     ];
-    let ide_types = ["ANTIGRAVITY", "VSCODE", "JETBRAINS", "CLOUD_SHELL", "IDE_UNSPECIFIED"];
+    let ide_types = [
+        "ANTIGRAVITY",
+        "VSCODE",
+        "JETBRAINS",
+        "CLOUD_SHELL",
+        "IDE_UNSPECIFIED",
+    ];
 
     let mut last_err = String::from("unknown");
     for endpoint in endpoints {
@@ -417,10 +427,16 @@ pub async fn load_code_assist(
                 Ok(resp) => {
                     let status = resp.status().as_u16();
                     if status == 200 {
-                        return resp.json().await.map_err(|e| format!("loadCodeAssist decode: {e}"));
+                        return resp
+                            .json()
+                            .await
+                            .map_err(|e| format!("loadCodeAssist decode: {e}"));
                     }
                     let body = resp.text().await.unwrap_or_default();
-                    last_err = format!("loadCodeAssist ({endpoint}, {ide_type}) -> {status}: {}", tail(&body));
+                    last_err = format!(
+                        "loadCodeAssist ({endpoint}, {ide_type}) -> {status}: {}",
+                        tail(&body)
+                    );
                 }
                 Err(e) => {
                     last_err = format!("loadCodeAssist ({endpoint}, {ide_type}) failed: {e}");
@@ -482,7 +498,11 @@ pub async fn onboard_user(
     Err("onboardUser did not complete (try again or create the project manually at https://console.cloud.google.com)".into())
 }
 
-fn authz_with_meta(token: &str, session_id: Option<&str>, seed: &str) -> reqwest::header::HeaderMap {
+fn authz_with_meta(
+    token: &str,
+    session_id: Option<&str>,
+    seed: &str,
+) -> reqwest::header::HeaderMap {
     let mut m = reqwest::header::HeaderMap::new();
     if let Ok(v) = format!("Bearer {token}").parse() {
         m.insert("Authorization", v);

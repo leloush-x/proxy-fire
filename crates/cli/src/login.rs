@@ -177,7 +177,8 @@ async fn antigravity_login(p: &ProviderConfig) -> Result<()> {
         .await
         .ok();
     let models =
-        proxy_fire_providers::antigravity::list_models(&client, &access, &seed, project.as_deref()).await;
+        proxy_fire_providers::antigravity::list_models(&client, &access, &seed, project.as_deref())
+            .await;
     if !models.is_empty() {
         println!("  \x1b[2mmodels on your account ({}):\x1b[0m", models.len());
         for m in models.iter().take(8) {
