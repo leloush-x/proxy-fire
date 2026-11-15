@@ -120,45 +120,76 @@ async fn antigravity_login(p: &ProviderConfig) -> Result<()> {
             .unwrap_or(0)
     );
     let url = proxy_fire_providers::antigravity::authorize_url(&state, &challenge);
-    println!("  1. Open this URL in your browser:\n     {url}");
+    println!("  1. Open this URL in your browser (click it, or copy):\n");
+    println!("     \x1b]8;;{url}\x1b\\{url}\x1b]8;;\x1b\\");
     println!("  2. Approve access with your Google account\n");
 
+    let callback_url = url.clone();
     let callback = std::thread::spawn(move || -> Result<String> {
         let listener = std::net::TcpListener::bind("127.0.0.1:51121").context(
             "binding callback listener on 127.0.0.1:51121 (is another antigravity-proxy running?)",
         )?;
-        use std::io::{BufRead, BufReader, Write};
-        let (stream, _) = listener.accept()?;
-        drop(listener);
-        let mut reader = BufReader::new(stream);
-        let mut line = String::new();
-        reader.read_line(&mut line)?;
-        let request_line = line.trim().to_string();
-        let html = String::from(
-            "<html><body><h2>Login complete.</h2><p>You may close this tab.</p></body></html>",
-        );
-        if let Some(target) = request_line.split_whitespace().nth(1) {
-            let query = target.split('?').nth(1).unwrap_or("");
-            for pair in query.split('&') {
-                let mut kv = pair.splitn(2, '=');
-                let k = kv.next().unwrap_or("");
-                let v = kv.next().unwrap_or("");
-                if k == "code" {
-                    let code = percent_encoding::percent_decode_str(v)
-                        .decode_utf8_lossy()
-                        .to_string();
-                    let resp = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}", html.len(), html);
-                    let _ = reader.get_mut().write_all(resp.as_bytes());
-                    return Ok(code);
-                }
+        use std::io::{BufRead, Write};
+        // First hit = the `/login` redirect; second = the OAuth callback.
+        let mut login_redirected = false;
+        loop {
+            let (stream, _) = listener.accept()?;
+            use std::io::BufReader as BR;
+            let mut reader = BR::new(stream);
+            let mut line = String::new();
+            reader.read_line(&mut line)?;
+            let request_line = line.trim().to_string();
+            let path = request_line
+                .split_whitespace()
+                .nth(1)
+                .unwrap_or("/")
+                .to_string();
+            if path == "/login" && !login_redirected {
+                let resp = format!(
+                    "HTTP/1.1 302 Found\r\nLocation: {}\r\nContent-Length: 0\r\n\r\n",
+                    callback_url
+                );
+                let _ = reader.get_mut().write_all(resp.as_bytes());
+                login_redirected = true;
+                continue;
             }
+            if path.starts_with("/oauth-callback") {
+                let query = path.split('?').nth(1).unwrap_or("");
+                for pair in query.split('&') {
+                    let mut kv = pair.splitn(2, '=');
+                    let k = kv.next().unwrap_or("");
+                    let v = kv.next().unwrap_or("");
+                    if k == "code" {
+                        let code = percent_encoding::percent_decode_str(v)
+                            .decode_utf8_lossy()
+                            .to_string();
+                        let html = "<html><body><h2>Login complete.</h2><p>You may close this tab.</p></body></html>";
+                        let resp = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",
+                            html.len(),
+                            html
+                        );
+                        let _ = reader.get_mut().write_all(resp.as_bytes());
+                        return Ok(code);
+                    }
+                }
+                let _ = reader
+                    .get_mut()
+                    .write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n");
+                anyhow::bail!("no 'code' parameter in OAuth callback ({request_line})")
+            }
+            // Any other path: redirect to Google too, for convenience
+            let resp = format!(
+                "HTTP/1.1 302 Found\r\nLocation: {}\r\nContent-Length: 0\r\n\r\n",
+                callback_url
+            );
+            let _ = reader.get_mut().write_all(resp.as_bytes());
+            login_redirected = true;
         }
-        let _ = reader
-            .get_mut()
-            .write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n");
-        anyhow::bail!("no 'code' parameter in OAuth callback ({request_line})")
     });
 
+    println!("  \x1b[2mshortcut — just open: \x1b[36mhttp://localhost:51121\x1b[0m");
+    println!("  \x1b[2m(your browser will be sent to Google automatically)\x1b[0m");
     println!("  \x1b[2mwaiting for the browser to redirect to http://localhost:51121 …\x1b[0m");
     let code = callback
         .join()
