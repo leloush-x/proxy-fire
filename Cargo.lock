@@ -1225,7 +1225,7 @@ dependencies = [
 
 [[package]]
 name = "proxy-fire"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1248,7 +1248,7 @@ dependencies = [
 
 [[package]]
 name = "proxy-fire-core"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -1265,7 +1265,7 @@ dependencies = [
 
 [[package]]
 name = "proxy-fire-providers"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -1283,7 +1283,7 @@ dependencies = [
 
 [[package]]
 name = "proxy-fire-proxy"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "axum",
  "chrono",
@@ -1303,7 +1303,7 @@ dependencies = [
 
 [[package]]
 name = "proxy-fire-scan"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "chrono",
  "futures",
